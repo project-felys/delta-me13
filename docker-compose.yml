@@ -3,10 +3,12 @@ services:
     image: vllm/vllm-openai:latest
     command: [
       "--model", "/models/PhiLia093-4B-FP8-BLOCK",
-      "--max-model-len", "3072",
+      "--max-model-len", "4096",
       "--trust-remote-code",
       "--default-chat-template-kwargs", "{\"enable_thinking\": false}",
-      "--gpu-memory-utilization", "0.80"
+      "--limit-mm-per-prompt", "{\"image\":0,\"video\":0}",
+      "--max-num-seqs", "32",
+      "--gpu-memory-utilization", "0.80",
     ]
     ports:
       - "8000:8000"
