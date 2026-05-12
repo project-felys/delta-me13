@@ -1,0 +1,23 @@
+services:
+  vllm:
+    image: vllm/vllm-openai:latest
+    command: [
+      "--model", "/models/PhiLia093-4B-FP8-BLOCK",
+      "--max-model-len", "3072",
+      "--trust-remote-code",
+      "--default-chat-template-kwargs", "{\"enable_thinking\": false}",
+      "--gpu-memory-utilization", "0.80"
+    ]
+    ports:
+      - "8000:8000"
+    volumes:
+      - "E:/Model:/models"
+    ipc: host
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
