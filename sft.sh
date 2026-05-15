@@ -5,11 +5,11 @@ nohup swift sft \
     --model '/root/autodl-tmp/cpt/v1-20260512-015051/checkpoint-400' \
     --model_type 'qwen3_5' \
     --template 'qwen3_5' \
-    --dataset 'sft.jsonl' 'sft-extra.jsonl' \
+    --dataset 'sft.jsonl' 'sft.reinforce.jsonl' \
     --split_dataset_ratio '0.01' \
-    --max_length '4096' \
-    --lora_rank '32' \
-    --lora_alpha '64' \
+    --max_length '5120' \
+    --lora_rank '16' \
+    --lora_alpha '32' \
     --learning_rate '1e-4' \
     --num_train_epochs '2.0' \
     --per_device_train_batch_size 4 \

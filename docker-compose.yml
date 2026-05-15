@@ -4,11 +4,11 @@ services:
     command: [
       "--model", "/models/PhiLia093-4B-FP8-BLOCK",
       "--max-model-len", "4096",
-      "--trust-remote-code",
-      "--default-chat-template-kwargs", "{\"enable_thinking\": false}",
-      "--limit-mm-per-prompt", "{\"image\":0,\"video\":0}",
       "--max-num-seqs", "32",
-      "--gpu-memory-utilization", "0.80",
+      "--trust-remote-code",
+      "--language-model-only",
+      "--default-chat-template-kwargs", "{\"enable_thinking\": false}",
+      "--gpu-memory-utilization", "0.70",
     ]
     ports:
       - "8000:8000"

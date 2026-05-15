@@ -5,7 +5,7 @@ nohup swift pt \
     --model 'Qwen/Qwen3.5-4B-Base' \
     --model_type 'qwen3_5' \
     --template 'qwen3_5' \
-    --dataset 'cpt.jsonl' 'cpt-vendor.jsonl' \
+    --dataset 'cpt.jsonl' 'cpt.vendor.jsonl' \
     --split_dataset_ratio '0.01' \
     --max_length '5120' \
     --tuner_type 'full' \
