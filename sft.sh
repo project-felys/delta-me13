@@ -8,9 +8,9 @@ nohup swift sft \
     --dataset 'sft.jsonl' 'sft.reinforce.jsonl' \
     --split_dataset_ratio '0.01' \
     --max_length '5120' \
-    --lora_rank '16' \
-    --lora_alpha '32' \
-    --learning_rate '1e-4' \
+    --lora_rank '8' \
+    --lora_alpha '16' \
+    --learning_rate '2e-4' \
     --num_train_epochs '2.0' \
     --per_device_train_batch_size 4 \
     --gradient_accumulation_steps 1 \
