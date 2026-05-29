@@ -3,6 +3,7 @@ services:
     image: vllm/vllm-openai:latest
     command: [
       "--model", "/models/PhiLia093-4B-FP8-BLOCK",
+      "--served-model-name", "PhiLia093",
       "--max-model-len", "4096",
       "--max-num-seqs", "32",
       "--trust-remote-code",

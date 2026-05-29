@@ -8,14 +8,13 @@ nohup swift sft \
     --dataset 'sft.jsonl' 'sft.reinforce.jsonl' \
     --split_dataset_ratio '0.01' \
     --max_length '5120' \
-    --lora_rank '16' \
-    --lora_alpha '32' \
-    --learning_rate '1e-4' \
+    --tuner_type 'full' \
+    --learning_rate '1e-5' \
     --num_train_epochs '2.0' \
-    --per_device_train_batch_size 4 \
-    --gradient_accumulation_steps 1 \
+    --per_device_train_batch_size 2 \
+    --gradient_accumulation_steps 2 \
     --eval_steps '50' \
-    --save_steps '100' \
+    --save_steps '400' \
     --output_dir '/root/autodl-tmp/sft' \
     --attn_impl 'flash_attention_2' \
     --neftune_noise_alpha '5' \
@@ -23,7 +22,7 @@ nohup swift sft \
     --warmup_ratio '0.05' \
     --report_to 'tensorboard' \
     --use_liger_kernel 'True' \
-    --dataset_num_proc 2 \
-    --dataloader_num_workers 2 \
+    --dataset_num_proc 4 \
+    --dataloader_num_workers 4 \
     --packing \
     > "$(date +%s).log" 2>&1 &
