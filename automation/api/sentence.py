@@ -33,7 +33,7 @@ class Sentence(BaseModel):
     @functools.cached_property
     def num_tokens(self) -> int:
         s = self.pretty_string
-        return self.__get_num_tokens_func(s)
+        return self.__get_token_counter_func(s)
 
     @staticmethod
     def __auto_format(sentence: Sentence) -> str:
@@ -52,9 +52,9 @@ class Sentence(BaseModel):
         cls.__match_sub_func = staticmethod(backend)
 
     @staticmethod
-    def __get_num_tokens_func(s: str) -> int:
+    def __get_token_counter_func(s: str) -> int:
         return len(s)
 
     @classmethod
-    def set_get_num_tokens_func(cls, backend: Callable[[str], int]) -> None:
-        cls.__get_num_tokens_func = staticmethod(backend)
+    def set_token_counter_func(cls, backend: Callable[[str], int]) -> None:
+        cls.__get_token_counter_func = staticmethod(backend)

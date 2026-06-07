@@ -4,13 +4,23 @@ The first product of this project is `PhiLia093-4B-FP8-BLOCK`. Feel free to [cha
 
 ## Corpora
 
-The corpora generation scripts rely on an external game data repository, which I will not mention here. The command below builds the dataset in all languages:
+The corpora generation scripts rely on an external game data repository, which I will not name here. If you find that repository, clone it and replace `<game-data-repository>` with its path. The following commands build the dataset in [standard](https://swift.readthedocs.io/en/latest/Customization/Custom-dataset.html#standard-dataset-format) format for all 13 languages.
 
-```
-python3 main.py --root-dir <game-data-repository> --mode <mode>
+```sh
+# Pre-training
+python3 main.py --dataset everything --root-dir <game-data-repository> --num-proc 13
+python3 main.py --dataset amphoreus --root-dir <game-data-repository>
+
+# Supervised Fine-turing
+python3 main.py --dataset cyrene --root-dir <game-data-repository>
 ```
 
-If you find the game data repository, clone it and replace `<game-data-repository>` with its path. Use `pt` or `sft` for the `--mode` argument: `pt` generates Amphoreus corpora for pre-training, while `sft` generates Cyrene corpora for supervised fine-tuning. Both outputs use ChatML format.
+Vendor data is copied from the official [wiki](https://bbs.mihoyo.com/sr/wiki/content/5851/detail), so no external data source is needed.
+
+```sh
+# Pre-training
+python3 main.py --dataset vendor --root-dir vendor
+```
 
 ## License
 
