@@ -39,7 +39,7 @@ MAX_SEQUENCE_LENGTH = 4096
 
 ds = load_dataset(
     "json",
-    data_files="/root/autodl-tmp/sft-extra.jsonl",
+    data_files="/root/autodl-tmp/corpora/cyrene/chs.jsonl",
     split=f"train[:{NUM_CALIBRATION_SAMPLES}]",
 )
 ds = ds.select_columns(["messages"])

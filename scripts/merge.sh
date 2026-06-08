@@ -1,3 +1,4 @@
+MODELSCOPE_CACHE=/root/autodl-tmp/.cache \
 swift export \
-    --adapters /root/autodl-tmp/sft/v3-20260512-063336/checkpoint-500 \
+    --adapters  /root/autodl-tmp/sft/v8-20260609-035234/checkpoint-363 \
     --merge_lora true

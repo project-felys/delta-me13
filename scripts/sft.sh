@@ -2,24 +2,29 @@ CUDA_VISIBLE_DEVICES=0 \
 MODELSCOPE_CACHE=/root/autodl-tmp/.cache \
 nohup swift sft \
     --torch_dtype 'bfloat16' \
-    --model '/root/autodl-tmp/cpt/v1-20260512-015051/checkpoint-400' \
+    --model /root/autodl-tmp/pt/v4-20260608-121518/checkpoint-465 \
     --model_type 'qwen3_5' \
     --template 'qwen3_5' \
-    --dataset 'sft.jsonl' 'sft.reinforce.jsonl' \
+    --dataset \
+        '/root/autodl-tmp/corpora/cyrene' \
+        '/root/autodl-tmp/corpora/cyrene' \
+        '/root/autodl-tmp/corpora/cyrene/chs.jsonl' \
+        '/root/autodl-tmp/corpora/cyrene/en.jsonl' \
     --split_dataset_ratio '0.01' \
-    --max_length '5120' \
-    --tuner_type 'full' \
-    --learning_rate '1e-5' \
-    --num_train_epochs '2.0' \
+    --max_length '8192' \
+    --lora_rank '32' \
+    --lora_alpha '64' \
+    --learning_rate '1e-4' \
+    --num_train_epochs '1.0' \
     --per_device_train_batch_size 2 \
-    --gradient_accumulation_steps 2 \
+    --gradient_accumulation_steps 1 \
     --eval_steps '50' \
-    --save_steps '400' \
+    --save_steps '300' \
     --output_dir '/root/autodl-tmp/sft' \
     --attn_impl 'flash_attention_2' \
-    --neftune_noise_alpha '5' \
+    --neftune_noise_alpha '0' \
     --truncation_strategy 'right' \
-    --warmup_ratio '0.05' \
+    --warmup_ratio '0.10' \
     --report_to 'tensorboard' \
     --use_liger_kernel 'True' \
     --dataset_num_proc 4 \
