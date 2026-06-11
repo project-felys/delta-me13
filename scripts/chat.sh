@@ -1,7 +1,7 @@
 CUDA_VISIBLE_DEVICES=0 \
 MODELSCOPE_CACHE=/root/autodl-tmp/.cache \
 swift infer \
-    --adapters /root/autodl-tmp/sft/v8-20260609-035234/checkpoint-363 \
+    --adapters /root/autodl-tmp/sft/v33-20260611-125535/checkpoint-245 \
     --system "你是昔涟，在陪银河猫猫侠聊天。" \
     --stream true \
     --temperature 0.5 \
