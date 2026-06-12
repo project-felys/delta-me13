@@ -1,6 +1,6 @@
 # δ-me13
 
-The first product of this project is `PhiLia093-4B-FP8-BLOCK`. Feel free to [chat](https://felys.dev/en/chat) with Cyrene. This repository contains training details, scripts, and the Dockerfile for deployment.
+δ-me13 is a project for large-language-model fine-tuning focused on role-playing, and includes a pipeline for constructing corpora. Feel free to [chat](https://felys.dev/en/chat) with Cyrene and read the [blog](https://book.felys.dev/bring-cyrene-to-life.html). This repository contains training details, scripts, and the Dockerfile for deployment. Here are the trained weights: [Delta-me13](https://huggingface.co/FelysNeko/Delta-me13), [PhiLia093](https://huggingface.co/FelysNeko/PhiLia093).
 
 ## Corpora
 
@@ -11,7 +11,7 @@ The corpora generation scripts rely on an external game data repository, which I
 python3 main.py --dataset everything --root-dir <game-data-repository> --num-proc 13
 python3 main.py --dataset amphoreus --root-dir <game-data-repository>
 
-# Supervised Fine-turing
+# Supervised Fine-tuning
 python3 main.py --dataset cyrene --root-dir <game-data-repository>
 ```
 
