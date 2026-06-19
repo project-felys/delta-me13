@@ -1,3 +1,8 @@
 __pycache__/
 .vscode/
 corpora/
+audio/
+checkpoints/
+cyrene/
+
+.DS_Store

@@ -26,6 +26,10 @@ class Sentence(BaseModel):
         )
 
     @functools.cached_property
+    def pretty_name(self) -> str:
+        return self.__match_sub_func(self.name)
+
+    @functools.cached_property
     def pretty_string(self) -> str:
         s = self.__auto_format(self)
         return self.__match_sub_func(s)

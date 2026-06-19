@@ -22,10 +22,22 @@ class Round(BaseModel):
         return Round(user=self.user[-max_user_lines:], assistant=self.assistant)
 
     @classmethod
-    def single_line(cls, user: str, assistant: str) -> "Round":
+    def single_line(
+        cls, user_text: str, assistant_name: str, assistant_text: str
+    ) -> "Round":
         return cls(
-            user=tuple([Sentence.plain_text(user)]),
-            assistant=tuple([Sentence.plain_text(assistant)]),
+            user=tuple([Sentence.plain_text(user_text)]),
+            assistant=tuple(
+                [
+                    Sentence(
+                        talk_sentence_id=None,
+                        name=assistant_name,
+                        name_hash=None,
+                        text=assistant_text,
+                        text_hash=None,
+                    )
+                ]
+            ),
         )
 
     def to_jsonl(self) -> Iterator[Mapping[str, str]]:
@@ -41,17 +53,45 @@ class Conversation(BaseModel, OutTrait):
 
     rounds: Tuple[Round, ...]
 
+    def is_self_talk(self) -> bool:
+        return len(self.rounds) == 1 and not self.rounds[0].user
+
     @property
     def num_tokens(self) -> int:
         return sum(x.num_tokens for x in self.rounds)
 
     @classmethod
-    def single_round(cls, user: str, assistant: str) -> "Conversation":
-        return cls(rounds=tuple([Round.single_line(user, assistant)]))
+    def single_round(
+        cls, user_text: str, assistant_name: str, assistant_text: str
+    ) -> "Conversation":
+        return cls(
+            rounds=tuple([Round.single_line(user_text, assistant_name, assistant_text)])
+        )
+
+    def split(self, max_tokens: int) -> Iterator[Conversation]:
+        current_num_tokens = 0
+        start = 0
+
+        for i, round in enumerate(self.rounds):
+            num_tokens = round.num_tokens
+            if current_num_tokens + num_tokens > max_tokens and start < i:
+                yield Conversation(rounds=self.rounds[start:i])
+                start = i
+                current_num_tokens = num_tokens
+            else:
+                current_num_tokens += num_tokens
+
+        if start < len(self.rounds):
+            yield Conversation(rounds=self.rounds[start:])
 
     def clip(self, max_user_lines: int) -> "Conversation":
         return Conversation(rounds=tuple(x.clip(max_user_lines) for x in self.rounds))
 
-    def to_jsonl(self) -> Mapping[str, Any]:
-        messages = list(line for round in self.rounds for line in round.to_jsonl())
+    def to_jsonl(self, **kwargs: Any) -> Mapping[str, Any]:
+        use_system = bool(kwargs["use_system"])
+        messages = []
+        if use_system:
+            name = self.rounds[0].assistant[0].pretty_name
+            messages.append({"role": "system", "content": name})
+        messages.extend(line for round in self.rounds for line in round.to_jsonl())
         return {"messages": messages}

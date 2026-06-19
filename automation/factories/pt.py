@@ -8,7 +8,7 @@ import pandas as pd
 
 from automation.api.paragraph import Paragraph
 from automation.api.sentence import Sentence
-from automation.turn_based_game_loader import TurnBasedGameLoader
+from automation.loaders.turn_based_game_data import TurnBasedGameDataLoader
 
 
 def str_to_lines(string: str) -> Iterator[str]:
@@ -27,9 +27,11 @@ def get_isin_mask(series: pd.Series, keys: Iterable[int] | None = None) -> pd.Se
         return pd.Series(True, index=series.index)
 
 
-class PtFactory(TurnBasedGameLoader):
-    def __init__(self, root_dir: Path, language: str):
-        super().__init__(root_dir, language)
+class PtFactory(TurnBasedGameDataLoader):
+    def __init__(
+        self, turn_based_game_data_dir: Path, turn_based_game_data_language: str
+    ):
+        super().__init__(turn_based_game_data_dir, turn_based_game_data_language)
 
     @property
     def everything(self) -> Mapping[str, Iterator[Paragraph]]:
@@ -101,7 +103,7 @@ class PtFactory(TurnBasedGameLoader):
         for _, sub_df in df.groupby("group"):
             sentences = (
                 self.sentence_factory(talk_sentence_id, name_hash, text_hash)
-                for talk_sentence_id, name_hash, text_hash, _ in sub_df.itertuples(
+                for talk_sentence_id, _, name_hash, text_hash, _ in sub_df.itertuples(
                     index=False
                 )
             )
@@ -142,7 +144,7 @@ class PtFactory(TurnBasedGameLoader):
     ) -> Iterator[Paragraph]:
         df = self.voice_atlas_table
         mask = get_isin_mask(df["avatar_id"], avatar_ids)
-        df = df[mask]
+        df = df.loc[mask, ["avatar_id", "voice_title_hash", "voice_m_hash", "sort_id"]]
 
         for avatar_id, sub_df in df.groupby("avatar_id"):
             name = self.avatar_id_to_name_map[avatar_id]

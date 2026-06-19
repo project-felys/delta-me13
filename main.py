@@ -1,28 +1,37 @@
-import os
-
-os.environ["TRANSFORMERS_VERBOSITY"] = "error"
-
-
 import argparse
 import itertools
 import json
 import multiprocessing as mp
+import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import IO, Iterator, List, Literal, Mapping
+from typing import IO, Any, Callable, Iterator, List, Mapping
 
-from automation.api.conversation import Conversation
-from automation.api.paragraph import Paragraph
-from automation.api.sentence import Sentence
-from automation.api.out_trait import OutTrait
-from automation.factories.sft import SftFactory
-from automation.factories.pt import PtFactory
-from automation.factories.vendor import VendorFactory
-from automation.match_sub import MatchSub
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 
 import tqdm
-from transformers import AutoTokenizer
 
-LANGUAGES = [
+from automation.api.audio import Audio
+from automation.api.conversation import Conversation
+from automation.api.out_trait import OutTrait
+from automation.api.paragraph import Paragraph
+from automation.factories.audio import AudioFactory
+from automation.factories.pt import PtFactory
+from automation.factories.sft import SftFactory
+from automation.factories.vendor import VendorFactory
+from automation.sdk.auto_format import (
+    get_cyrene_whitelist_auto_format,
+    get_retain_sentence_name_auto_format,
+)
+from automation.sdk.config import sentence_global_config
+from automation.sdk.match_sub import (
+    get_fast_felysneko_match_sub,
+    get_felysneko_match_sub,
+    get_slow_path_only_match_sub,
+)
+from automation.sdk.token_counter import get_qwen3_token_counter
+
+TEXT_LANGUAGES = [
     "chs",
     "cht",
     "de",
@@ -38,82 +47,20 @@ LANGUAGES = [
     "vi",
 ]
 
-
-def get_token_counter():
-    tokenizer = AutoTokenizer.from_pretrained(
-        "tokenizer", trust_remote_code=True, local_files_only=True
-    )
-    return lambda x: len(tokenizer.encode(x))
-
-
-def get_match_sub(language: str, is_male: bool):
-    nickname = "银河猫猫侠" if language.lower() in ("chs", "cht") else "FelysNeko"
-    return MatchSub(nickname, is_male)
+VOICEOVER_LANGUAGES = [
+    "Chinese(PRC)",
+    "English",
+    "Japanese",
+    "Korean",
+]
 
 
-def get_auto_format(language: str, mode: Literal["pt", "sft"]):
-    lparen = "("
-    rparen = ")"
-    colon = ": "
-    if language.lower() in ("chs", "cht"):
-        lparen = "（"
-        rparen = "）"
-        colon = "："
-
-    def pt_auto_format(sentence: Sentence) -> str:
-        text = sentence.text
-        if sentence.name is None:
-            return text
-        else:
-            return f"{sentence.name}{colon}{text}"
-
-    def sft_auto_format(sentence: Sentence) -> str:
-        text = sentence.text.lstrip(lparen).rstrip(rparen)
-        name_hash = sentence.name_hash
-        if (
-            name_hash is None
-            or name_hash == 7108701208745180573
-            or name_hash
-            in {
-                2309313067306506373,  # 昔涟
-                11001695012879251917,  # 迷迷
-                6462539533232001276,  # 少女的声音
-                402745232924048698,  # 「记忆的花」
-                14378608167795068022,  # 「记忆的花蕾」
-                122935082492335341,  # 「记忆的幼芽」
-                11263148736238834705,  # 「记忆的种子」
-                6846009442988187041,  # {NICKNAME}&昔涟
-                4455374036049186635,  # 昔涟
-                13483973725572441939,  # 「另一位作者♪」
-                12560857117710338840,  # 往昔的涟漪
-            }
-        ):
-            return text
-        else:
-            return f"{lparen}{text}{rparen}"
-
-    if mode == "pt":
-        return pt_auto_format
-    elif mode == "sft":
-        return sft_auto_format
-    else:
-        raise
-
-
-def setup_global_config(language: str, mode: Literal["pt", "sft"]):
-    auto_format = get_auto_format(language, mode)
-    token_counter = get_token_counter()
-    match_sub = get_match_sub(language, False)
-
-    Sentence.set_auto_format_func(auto_format)
-    Sentence.set_token_counter_func(token_counter)
-    Sentence.set_match_sub_func(match_sub)
-
-
-def to_jsonl(iterable: Iterator[OutTrait], f: IO[str]) -> Iterator[Paragraph]:
+def to_jsonl(
+    iterable: Iterator[OutTrait], f: IO[str], **kwargs: Any
+) -> Iterator[OutTrait]:
     for each in iterable:
-        line = each.to_jsonl()
-        json.dump(line, f, ensure_ascii=False)
+        line = each.to_jsonl(**kwargs)
+        json.dump(line, f, ensure_ascii=False, default=str)
         print(file=f)
         yield each
 
@@ -123,9 +70,11 @@ def num_tokens(iterable: Iterator[OutTrait]) -> Iterator[int]:
         yield each.num_tokens
 
 
-def emit(iterable: Iterator[OutTrait], output_path: Path, desc: str):
+def emit(
+    iterable: Iterator[OutTrait], output_path: Path, desc: str, **kwargs: Any
+) -> List[int]:
     with open(output_path, "w+") as file:
-        iterable = to_jsonl(iterable, file)
+        iterable = to_jsonl(iterable, file, **kwargs)
         iterable = num_tokens(iterable)
         metrics = list(tqdm.tqdm(iterable, desc=f"> {desc}"))
     return metrics
@@ -134,8 +83,8 @@ def emit(iterable: Iterator[OutTrait], output_path: Path, desc: str):
 def __split_paragraphs(
     iterable: Iterator[Paragraph], max_token: int
 ) -> Iterator[Paragraph]:
-    for paragraph in iterable:
-        yield from paragraph.split(max_token)
+    for each in iterable:
+        yield from each.split(max_token)
 
 
 def __clip_conversations(
@@ -145,41 +94,171 @@ def __clip_conversations(
         yield each.clip(max_user_lines)
 
 
-def worker_everything(output_dir: Path, root_dir: Path, language: str):
-    setup_global_config(language, "pt")
-    target = PtFactory(root_dir, language).everything.values()
+def __split_conversations(
+    iterable: Iterator[Conversation], max_token: int
+) -> Iterator[Conversation]:
+    for each in iterable:
+        yield from each.split(max_token)
+
+
+def __filter_conversations(
+    iterable: Iterator[Conversation], max_token: int
+) -> Iterator[Conversation]:
+    for each in iterable:
+        if each.num_tokens > max_token or each.is_self_talk():
+            continue
+        yield each
+
+
+def __convert_audio(
+    iterable: Iterator[Audio], output_dir: Path, num_threads: int
+) -> Iterator[Audio]:
+    def worker(audio: Audio) -> Audio:
+        audio.wem_to_wav_by_vgmstream(output_dir)
+        return audio
+
+    with ThreadPoolExecutor(max_workers=num_threads) as ex:
+        for each in ex.map(worker, iterable):
+            yield each
+
+
+def pt_everything(
+    output_dir: Path, turn_based_game_data_dir: Path, language: str
+) -> List[int]:
+    sentence_global_config(
+        auto_format=get_retain_sentence_name_auto_format(language),
+        token_counter=get_qwen3_token_counter(),
+        match_sub=get_felysneko_match_sub(language),
+    )
+
+    target = PtFactory(turn_based_game_data_dir, language).everything.values()
     iterable = itertools.chain.from_iterable(target)
     iterable = __split_paragraphs(iterable, 4096)
     return emit(iterable, output_dir / f"{language}.jsonl", f"{language:>3}")
 
 
-def worker_amphoreus(output_dir: Path, root_dir: Path, language: str):
-    setup_global_config(language, "pt")
-    target = PtFactory(root_dir, language).amphoreus.values()
+def pt_amphoreus(
+    output_dir: Path, turn_based_game_data_dir: Path, language: str
+) -> List[int]:
+    sentence_global_config(
+        auto_format=get_retain_sentence_name_auto_format(language),
+        token_counter=get_qwen3_token_counter(),
+        match_sub=get_felysneko_match_sub(language),
+    )
+
+    target = PtFactory(turn_based_game_data_dir, language).amphoreus.values()
     iterable = itertools.chain.from_iterable(target)
     iterable = __split_paragraphs(iterable, 4096)
     return emit(iterable, output_dir / f"{language}.jsonl", f"{language:>3}")
 
 
-def worker_vendor(output_dir: Path, root_dir: Path):
-    setup_global_config("chs", "pt")
-    iterable = VendorFactory(root_dir).build_vendor()
-    return emit(iterable, output_dir / "vendor.jsonl", "vendor")
+def pt_vendor(output_dir: Path, vendor_dir: Path):
+    sentence_global_config(
+        auto_format=None,
+        token_counter=get_qwen3_token_counter(),
+        match_sub=get_fast_felysneko_match_sub(),
+    )
+
+    factory = VendorFactory(vendor_dir)
+    named_metrics = {
+        "miyoushe": emit(
+            factory.build_miyoushe(), output_dir / "miyoushe.jsonl", "miyoushe"
+        ),
+        "coig": emit(factory.build_coig(), output_dir / "coig.jsonl", "coig"),
+    }
+
+    return named_metrics
 
 
-def worker_cyrene(output_dir: Path, root_dir: Path, language: str):
-    setup_global_config(language, "sft")
-    target = SftFactory(root_dir, language).cyrene.values()
+def sft_everything(
+    output_dir: Path, turn_based_game_data_dir: Path, language: str
+) -> List[int]:
+    sentence_global_config(
+        auto_format=None,
+        token_counter=get_qwen3_token_counter(),
+        match_sub=get_felysneko_match_sub(language),
+    )
+
+    target = SftFactory(turn_based_game_data_dir, language).everything.values()
     iterable = itertools.chain.from_iterable(target)
     iterable = __clip_conversations(iterable, 10)
-    return emit(iterable, output_dir / f"{language}.jsonl", f"{language:>3}")
+    iterable = __split_conversations(iterable, 4096)
+    iterable = __filter_conversations(iterable, 4096)
+    return emit(
+        iterable, output_dir / f"{language}.jsonl", f"{language:>3}", use_system=True
+    )
 
 
-def __ensure_output_dir(output_dir: Path):
+def sft_amphoreus(
+    output_dir: Path, turn_based_game_data_dir: Path, language: str
+) -> List[int]:
+    sentence_global_config(
+        auto_format=None,
+        token_counter=get_qwen3_token_counter(),
+        match_sub=get_felysneko_match_sub(language),
+    )
+
+    target = SftFactory(turn_based_game_data_dir, language).amphoreus.values()
+    iterable = itertools.chain.from_iterable(target)
+    iterable = __clip_conversations(iterable, 10)
+    iterable = __split_conversations(iterable, 4096)
+    iterable = __filter_conversations(iterable, 4096)
+    return emit(
+        iterable, output_dir / f"{language}.jsonl", f"{language:>3}", use_system=True
+    )
+
+
+def sft_cyrene(
+    output_dir: Path, turn_based_game_data_dir: Path, language: str
+) -> List[int]:
+    sentence_global_config(
+        auto_format=get_cyrene_whitelist_auto_format(language),
+        token_counter=get_qwen3_token_counter(),
+        match_sub=get_felysneko_match_sub(language),
+    )
+
+    target = SftFactory(turn_based_game_data_dir, language).cyrene.values()
+    iterable = itertools.chain.from_iterable(target)
+    iterable = __clip_conversations(iterable, 10)
+    iterable = __filter_conversations(iterable, 8192)
+    return emit(
+        iterable, output_dir / f"{language}.jsonl", f"{language:>3}", use_system=False
+    )
+
+
+def tts_cyrene(
+    output_dir: Path,
+    unpacked_audio_dir: Path,
+    turn_based_game_data_dir: Path,
+    language: str,
+    num_threads: int,
+) -> Iterator[Audio]:
+    sentence_global_config(
+        auto_format=None,
+        token_counter=None,
+        match_sub=get_slow_path_only_match_sub(),
+    )
+
+    unpacked_audio_language_dir = unpacked_audio_dir / language
+    audio_dir = output_dir / language
+    __ensure_dir_exist(unpacked_audio_language_dir)
+    __ensure_dir_exist(audio_dir)
+
+    target = AudioFactory(
+        unpacked_audio_language_dir, turn_based_game_data_dir
+    ).cyrene.values()
+    iterable = itertools.chain.from_iterable(target)
+    iterable = __convert_audio(iterable, audio_dir, num_threads)
+    return emit(iterable, output_dir / f"{language}.jsonl", f"{language:>12}")
+
+
+def __ensure_dir_exist(output_dir: Path) -> None:
     os.makedirs(output_dir, exist_ok=True)
 
 
-def __dump_name_metrics(named_metrics: Mapping[str, List[int]], output_path: Path):
+def __dump_name_metrics(
+    named_metrics: Mapping[str, List[int]], output_path: Path
+) -> None:
     with open(output_path, "w+") as f:
         json.dump(named_metrics, f)
 
@@ -187,102 +266,153 @@ def __dump_name_metrics(named_metrics: Mapping[str, List[int]], output_path: Pat
     print(f"Estimated number of tokens: {num_tokens}")
 
 
-def entry_everything(args: argparse.Namespace):
-    output_dir = args.output_dir / "everything"
-    __ensure_output_dir(output_dir)
+def entry_multilingual(
+    args: argparse.Namespace, f: Callable[[Path, Path, str], List[int]]
+) -> None:
+    output_dir: Path = args.output_dir / args.namespace / args.dataset
+    __ensure_dir_exist(output_dir)
 
-    tasks = [(output_dir, args.root_dir, lang) for lang in LANGUAGES]
+    tasks = [
+        (output_dir, args.turn_based_game_data_dir, lang) for lang in TEXT_LANGUAGES
+    ]
     pool = mp.Pool(processes=args.num_proc)
 
     try:
-        metrics = pool.starmap(worker_everything, tasks)
+        metrics = pool.starmap(f, tasks)
     finally:
         pool.close()
         pool.join()
 
-    named_metrics = {k: v for k, v in zip(LANGUAGES, metrics)}
-    __dump_name_metrics(named_metrics, args.output_dir / "everything.json")
+    named_metrics = {k: v for k, v in zip(TEXT_LANGUAGES, metrics)}
+    __dump_name_metrics(named_metrics, output_dir.parent / f"{args.dataset}.json")
 
 
-def entry_amphoreus(args: argparse.Namespace):
-    output_dir = args.output_dir / "amphoreus"
-    __ensure_output_dir(output_dir)
+def entry_vendor(args: argparse.Namespace) -> None:
+    output_dir: Path = args.output_dir / "pt" / "vendor"
+    __ensure_dir_exist(output_dir)
 
-    tasks = [(output_dir, args.root_dir, lang) for lang in LANGUAGES]
-    pool = mp.Pool(processes=args.num_proc)
+    named_metrics = pt_vendor(output_dir, args.vendor_dir)
+
+    __dump_name_metrics(named_metrics, output_dir.parent / "vendor.json")
+
+
+def entry_audio(
+    args: argparse.Namespace, f: Callable[[Path, Path], Iterator[Audio]]
+) -> None:
+    output_dir: Path = args.output_dir / "tts" / args.dataset
+    __ensure_dir_exist(output_dir)
+
+    tasks = [
+        (
+            output_dir,
+            args.unpacked_audio_dir,
+            args.turn_based_game_data_dir,
+            lang,
+            args.num_threads,
+        )
+        for lang in VOICEOVER_LANGUAGES
+    ]
+    pool = mp.Pool(processes=len(VOICEOVER_LANGUAGES))
 
     try:
-        metrics = pool.starmap(worker_amphoreus, tasks)
+        metrics = pool.starmap(f, tasks)
     finally:
         pool.close()
         pool.join()
 
-    named_metrics = {k: v for k, v in zip(LANGUAGES, metrics)}
-    __dump_name_metrics(named_metrics, args.output_dir / "amphoreus.json")
+    named_metrics = {k: v for k, v in zip(VOICEOVER_LANGUAGES, metrics)}
+    __dump_name_metrics(named_metrics, output_dir.parent / f"{args.dataset}.json")
 
 
-def entry_vendor(args: argparse.Namespace):
-    output_dir = args.output_dir / "vendor"
-    __ensure_output_dir(output_dir)
-
-    metrics = worker_vendor(output_dir, args.root_dir)
-
-    named_metrics = {"vendor": metrics}
-    __dump_name_metrics(named_metrics, args.output_dir / "vendor.json")
-
-
-def entry_cyrene(args: argparse.Namespace):
-    output_dir = args.output_dir / "cyrene"
-    __ensure_output_dir(output_dir)
-
-    tasks = [(output_dir, args.root_dir, lang) for lang in LANGUAGES]
-    pool = mp.Pool(processes=args.num_proc)
-
-    try:
-        metrics = pool.starmap(worker_cyrene, tasks)
-    finally:
-        pool.close()
-        pool.join()
-
-    named_metrics = {k: v for k, v in zip(LANGUAGES, metrics)}
-    __dump_name_metrics(named_metrics, args.output_dir / "cyrene.json")
-
-
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--dataset",
-        choices=["everything", "amphoreus", "vendor", "cyrene"],
-        required=True,
-    )
-    parser.add_argument(
-        "--root-dir",
-        type=Path,
-        required=True,
-    )
-    parser.add_argument(
+
+    parent = argparse.ArgumentParser(add_help=False)
+    parent.add_argument(
         "--output-dir",
         type=Path,
         default=Path("corpora"),
     )
-    parser.add_argument(
+
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    multilingual = subparsers.add_parser("multilingual", parents=[parent])
+    multilingual.add_argument(
+        "--turn-based-game-data-dir",
+        type=Path,
+        required=True,
+    )
+    multilingual.add_argument(
+        "--namespace",
+        choices=["pt", "sft"],
+        required=True,
+    )
+    multilingual.add_argument(
+        "--dataset",
+        choices=["everything", "amphoreus", "cyrene"],
+        required=True,
+    )
+    multilingual.add_argument(
         "--num-proc",
         type=int,
         default=4,
     )
 
+    vendor = subparsers.add_parser("vendor", parents=[parent])
+    vendor.add_argument(
+        "--vendor-dir",
+        type=Path,
+        required=True,
+    )
+
+    audio = subparsers.add_parser("audio", parents=[parent])
+    audio.add_argument(
+        "--turn-based-game-data-dir",
+        type=Path,
+        required=True,
+    )
+    audio.add_argument(
+        "--unpacked-audio-dir",
+        type=Path,
+        required=True,
+    )
+    audio.add_argument(
+        "--dataset",
+        choices=["cyrene"],
+        required=True,
+    )
+    audio.add_argument(
+        "--num-threads",
+        type=int,
+        default=8,
+    )
+
     args = parser.parse_args()
 
-    if args.dataset == "everything":
-        entry_everything(args)
-    elif args.dataset == "amphoreus":
-        entry_amphoreus(args)
-    elif args.dataset == "vendor":
-        entry_vendor(args)
-    elif args.dataset == "cyrene":
-        entry_cyrene(args)
-    else:
-        parser.error(f"Unsupported dataset: {args.dataset}")
+    match args.command:
+        case "multilingual":
+            match args.namespace, args.dataset:
+                case "pt", "everything":
+                    entry_multilingual(args, pt_everything)
+                case "pt", "amphoreus":
+                    entry_multilingual(args, pt_amphoreus)
+                case "sft", "everything":
+                    entry_multilingual(args, sft_everything)
+                case "sft", "amphoreus":
+                    entry_multilingual(args, sft_amphoreus)
+                case "sft", "cyrene":
+                    entry_multilingual(args, sft_cyrene)
+                case _:
+                    parser.error(f"Unsupported: {args.namespace} {args.dataset}")
+        case "vendor":
+            entry_vendor(args)
+        case "audio":
+            match args.dataset:
+                case "cyrene":
+                    entry_audio(args, tts_cyrene)
+                case _:
+                    parser.error(f"Unsupported: {args.dataset}")
+
 
 if __name__ == "__main__":
     main()

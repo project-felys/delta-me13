@@ -31,13 +31,12 @@ class Paragraph(BaseModel, OutTrait):
         if start < len(self.sentences):
             yield Paragraph(sentences=self.sentences[start:])
 
-    def to_jsonl(self) -> Mapping[str, Any]:
+    def to_jsonl(self, **_: Any) -> Mapping[str, Any]:
         lines = (s.pretty_string for s in self.sentences if s.pretty_string)
-        return {
-            "messages": [
-                {
-                    "role": "assistant",
-                    "content": "\n".join(lines),
-                }
-            ]
-        }
+        messages = [
+            {
+                "role": "assistant",
+                "content": "\n".join(lines),
+            }
+        ]
+        return {"messages": messages}

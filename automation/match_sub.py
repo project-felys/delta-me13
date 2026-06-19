@@ -24,28 +24,35 @@ class MatchSub:
 
     _skip_warning: Set[str] = {"{大地獣, ネクタール, 数学}"}
 
-    def __init__(self, nickname: str, is_male: bool) -> None:
+    def __init__(
+        self, nickname: str, is_male: bool, slow_path: bool, enable_warning: bool
+    ) -> None:
         self.nickname = nickname
         self.is_male = is_male
+        self.slow_path = slow_path
+        self.enable_warning = enable_warning
 
     def __call__(self, s: str) -> str:
         s = s.replace(self._nickname_str, self.nickname)
-        s = s.replace(self._heliobi_count_str, "3")
-        s = s.replace(self._space_str, " ")
 
-        s = self._remove_pattern.sub("", s)
-        s = self._layout_mobile_pattern.sub(r"\1", s)
+        if self.slow_path:
+            s = s.replace(self._heliobi_count_str, "3")
+            s = s.replace(self._space_str, " ")
 
-        if self.is_male:
-            s = self._male_pattern.sub(r"\1", s)
-            s = self._female_pattern.sub("", s)
-        else:
-            s = self._female_pattern.sub(r"\1", s)
-            s = self._male_pattern.sub("", s)
+            s = self._remove_pattern.sub("", s)
+            s = self._layout_mobile_pattern.sub(r"\1", s)
 
-        raw_warning = self._warning_pattern.findall(s)
-        warning = [w for w in raw_warning if w not in self._skip_warning]
-        if warning:
-            print(warning)
+            if self.is_male:
+                s = self._male_pattern.sub(r"\1", s)
+                s = self._female_pattern.sub("", s)
+            else:
+                s = self._female_pattern.sub(r"\1", s)
+                s = self._male_pattern.sub("", s)
+
+        if self.enable_warning:
+            raw_warning = self._warning_pattern.findall(s)
+            warning = [w for w in raw_warning if w not in self._skip_warning]
+            if warning:
+                print(warning)
 
         return s

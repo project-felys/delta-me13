@@ -1,16 +1,56 @@
 services:
-  vllm:
+  llm:
     image: vllm/vllm-openai:latest
-    command: [
-      "--model", "/models/PhiLia093-4B-FP8-BLOCK",
-      "--served-model-name", "PhiLia093",
-      "--max-model-len", "4096",
-      "--max-num-seqs", "32",
-      "--trust-remote-code",
-      "--language-model-only",
-      "--default-chat-template-kwargs", "{\"enable_thinking\": false}",
-      "--gpu-memory-utilization", "0.70",
-    ]
+    command:
+      [
+        "--trust-remote-code",
+        "--language-model-only",
+        "--model",
+        "/models/PhiLia093-LLM",
+        "--served-model-name",
+        "PhiLia093-LLM",
+        "--max-model-len",
+        "4096",
+        "--max-num-seqs",
+        "4",
+        "--default-chat-template-kwargs",
+        '{"enable_thinking": false}',
+        "--gpu-memory-utilization",
+        "0.80",
+      ]
+    ports:
+      - "8000:8000"
+    volumes:
+      - "E:/Model:/models"
+    ipc: host
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  tts:
+    image: vllm/vllm-omni:latest
+    command:
+      [
+        "vllm",
+        "serve",
+        "--omni",
+        "--trust-remote-code",
+        "--model",
+        "/models/PhiLia093-TTS",
+        "--served-model-name",
+        "PhiLia093-TTS",
+        "--max-model-len",
+        "1024",
+        "--max-num-seqs",
+        "4",
+        "--gpu-memory-utilization",
+        "0.80",
+      ]
     ports:
       - "8000:8000"
     volumes:
