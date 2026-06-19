@@ -31,7 +31,8 @@ class Paragraph(BaseModel, OutTrait):
         if start < len(self.sentences):
             yield Paragraph(sentences=self.sentences[start:])
 
-    def to_jsonl(self) -> Mapping[str, Any]:
+    def to_jsonl(self, use_system: bool) -> Mapping[str, Any]:
+        assert not use_system
         lines = (s.pretty_string for s in self.sentences if s.pretty_string)
         return {
             "messages": [

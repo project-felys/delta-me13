@@ -7,19 +7,22 @@
 The corpora generation scripts rely on an external game data repository, which I will not name here. If you find that repository, clone it and replace `<game-data-repository>` with its path. The following commands build the dataset in [standard](https://swift.readthedocs.io/en/latest/Customization/Custom-dataset.html#standard-dataset-format) format for all 13 languages.
 
 ```sh
+REPO='<game-data-repository>'
+
 # Pre-training
-python3 main.py --dataset everything --root-dir <game-data-repository> --num-proc 13
-python3 main.py --dataset amphoreus --root-dir <game-data-repository>
+python3 main.py --root-dir $REPO --dataset pt --num-proc 13
+python3 main.py --root-dir $REPO --dataset amphoreus
 
 # Supervised Fine-tuning
-python3 main.py --dataset cyrene --root-dir <game-data-repository>
+python3 main.py --root-dir $REPO --dataset sft --num-proc 13
+python3 main.py --root-dir $REPO --dataset cyrene
 ```
 
-Vendor data is copied from the official [wiki](https://bbs.mihoyo.com/sr/wiki/content/5851/detail), so no external data source is needed.
+Vendor data contains the official game [wiki](https://bbs.mihoyo.com/sr/wiki/content/5851/detail) and leetcode problems from [coig](https://huggingface.co/datasets/BAAI/COIG/blob/main/leetcode_instructions.jsonl), so no external data source is needed.
 
 ```sh
 # Pre-training
-python3 main.py --dataset vendor --root-dir vendor
+python3 main.py --root-dir vendor --dataset vendor
 ```
 
 ## License

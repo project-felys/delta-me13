@@ -8,7 +8,7 @@ import itertools
 import json
 import multiprocessing as mp
 from pathlib import Path
-from typing import IO, Iterator, List, Literal, Mapping
+from typing import IO, Any, Iterator, List, Literal, Mapping
 
 from automation.api.conversation import Conversation
 from automation.api.paragraph import Paragraph
@@ -46,12 +46,12 @@ def get_token_counter():
     return lambda x: len(tokenizer.encode(x))
 
 
-def get_match_sub(language: str, is_male: bool):
+def get_match_sub(language: str, is_male: bool, mute_warning: bool):
     nickname = "银河猫猫侠" if language.lower() in ("chs", "cht") else "FelysNeko"
-    return MatchSub(nickname, is_male)
+    return MatchSub(nickname, is_male, mute_warning)
 
 
-def get_auto_format(language: str, mode: Literal["pt", "sft"]):
+def get_auto_format(language: str, mode: Literal["pt", "sft", "vendor", "cyrene"]):
     lparen = "("
     rparen = ")"
     colon = ": "
@@ -68,6 +68,9 @@ def get_auto_format(language: str, mode: Literal["pt", "sft"]):
             return f"{sentence.name}{colon}{text}"
 
     def sft_auto_format(sentence: Sentence) -> str:
+        return sentence.text
+
+    def cyrene_auto_format(sentence: Sentence) -> str:
         text = sentence.text.lstrip(lparen).rstrip(rparen)
         name_hash = sentence.name_hash
         if (
@@ -92,27 +95,31 @@ def get_auto_format(language: str, mode: Literal["pt", "sft"]):
         else:
             return f"{lparen}{text}{rparen}"
 
-    if mode == "pt":
+    if mode == "pt" or mode == "vendor":
         return pt_auto_format
     elif mode == "sft":
         return sft_auto_format
+    elif mode == "cyrene":
+        return cyrene_auto_format
     else:
         raise
 
 
-def setup_global_config(language: str, mode: Literal["pt", "sft"]):
+def setup_global_config(language: str, mode: Literal["pt", "sft", "vendor", "cyrene"]):
     auto_format = get_auto_format(language, mode)
     token_counter = get_token_counter()
-    match_sub = get_match_sub(language, False)
+    match_sub = get_match_sub(language, False, mode == "vendor")
 
     Sentence.set_auto_format_func(auto_format)
     Sentence.set_token_counter_func(token_counter)
     Sentence.set_match_sub_func(match_sub)
 
 
-def to_jsonl(iterable: Iterator[OutTrait], f: IO[str]) -> Iterator[Paragraph]:
+def to_jsonl(
+    iterable: Iterator[OutTrait], use_system: bool, f: IO[str]
+) -> Iterator[Paragraph]:
     for each in iterable:
-        line = each.to_jsonl()
+        line = each.to_jsonl(use_system)
         json.dump(line, f, ensure_ascii=False)
         print(file=f)
         yield each
@@ -123,9 +130,9 @@ def num_tokens(iterable: Iterator[OutTrait]) -> Iterator[int]:
         yield each.num_tokens
 
 
-def emit(iterable: Iterator[OutTrait], output_path: Path, desc: str):
+def emit(iterable: Iterator[OutTrait], output_path: Path, use_system: bool, desc: str):
     with open(output_path, "w+") as file:
-        iterable = to_jsonl(iterable, file)
+        iterable = to_jsonl(iterable, use_system, file)
         iterable = num_tokens(iterable)
         metrics = list(tqdm.tqdm(iterable, desc=f"> {desc}"))
     return metrics
@@ -134,8 +141,8 @@ def emit(iterable: Iterator[OutTrait], output_path: Path, desc: str):
 def __split_paragraphs(
     iterable: Iterator[Paragraph], max_token: int
 ) -> Iterator[Paragraph]:
-    for paragraph in iterable:
-        yield from paragraph.split(max_token)
+    for each in iterable:
+        yield from each.split(max_token)
 
 
 def __clip_conversations(
@@ -145,34 +152,64 @@ def __clip_conversations(
         yield each.clip(max_user_lines)
 
 
-def worker_everything(output_dir: Path, root_dir: Path, language: str):
+def __split_conversations(
+    iterable: Iterator[Conversation], max_token: int
+) -> Iterator[Conversation]:
+    for each in iterable:
+        yield from each.split(max_token)
+
+
+def __filter_conversations(
+    iterable: Iterator[Conversation], max_token: int
+) -> Iterator[Conversation]:
+    for each in iterable:
+        if each.num_tokens <= max_token:
+            yield each
+
+
+def pt_honkai_star_rail(output_dir: Path, root_dir: Path, language: str):
     setup_global_config(language, "pt")
     target = PtFactory(root_dir, language).everything.values()
     iterable = itertools.chain.from_iterable(target)
     iterable = __split_paragraphs(iterable, 4096)
-    return emit(iterable, output_dir / f"{language}.jsonl", f"{language:>3}")
+    return emit(iterable, output_dir / f"{language}.jsonl", False, f"{language:>3}")
 
 
-def worker_amphoreus(output_dir: Path, root_dir: Path, language: str):
+def pt_amphoreus(output_dir: Path, root_dir: Path, language: str):
     setup_global_config(language, "pt")
     target = PtFactory(root_dir, language).amphoreus.values()
     iterable = itertools.chain.from_iterable(target)
     iterable = __split_paragraphs(iterable, 4096)
-    return emit(iterable, output_dir / f"{language}.jsonl", f"{language:>3}")
+    return emit(iterable, output_dir / f"{language}.jsonl", False, f"{language:>3}")
 
 
-def worker_vendor(output_dir: Path, root_dir: Path):
-    setup_global_config("chs", "pt")
-    iterable = VendorFactory(root_dir).build_vendor()
-    return emit(iterable, output_dir / "vendor.jsonl", "vendor")
+def pt_vendor(output_dir: Path, root_dir: Path):
+    setup_global_config("chs", "vendor")
+    factory = VendorFactory(root_dir)
+    return {
+        "miyoushe": emit(
+            factory.build_miyoushe(), output_dir / "miyoushe.jsonl", False, "miyoushe"
+        ),
+        "coig": emit(factory.build_coig(), output_dir / "coig.jsonl", False, "coig"),
+    }
 
 
-def worker_cyrene(output_dir: Path, root_dir: Path, language: str):
+def sft_honkai_star_rail(output_dir: Path, root_dir: Path, language: str):
     setup_global_config(language, "sft")
+    target = SftFactory(root_dir, language).everything.values()
+    iterable = itertools.chain.from_iterable(target)
+    iterable = __clip_conversations(iterable, 10)
+    iterable = __split_conversations(iterable, 4096)
+    iterable = __filter_conversations(iterable, 4096)
+    return emit(iterable, output_dir / f"{language}.jsonl", True, f"{language:>3}")
+
+
+def sft_cyrene(output_dir: Path, root_dir: Path, language: str):
+    setup_global_config(language, "cyrene")
     target = SftFactory(root_dir, language).cyrene.values()
     iterable = itertools.chain.from_iterable(target)
     iterable = __clip_conversations(iterable, 10)
-    return emit(iterable, output_dir / f"{language}.jsonl", f"{language:>3}")
+    return emit(iterable, output_dir / f"{language}.jsonl", False, f"{language:>3}")
 
 
 def __ensure_output_dir(output_dir: Path):
@@ -187,74 +224,34 @@ def __dump_name_metrics(named_metrics: Mapping[str, List[int]], output_path: Pat
     print(f"Estimated number of tokens: {num_tokens}")
 
 
-def entry_everything(args: argparse.Namespace):
-    output_dir = args.output_dir / "everything"
+def entry_multilingual(args: argparse.Namespace, f: Any):
+    output_dir = args.output_dir / args.dataset
     __ensure_output_dir(output_dir)
 
     tasks = [(output_dir, args.root_dir, lang) for lang in LANGUAGES]
     pool = mp.Pool(processes=args.num_proc)
 
     try:
-        metrics = pool.starmap(worker_everything, tasks)
+        metrics = pool.starmap(f, tasks)
     finally:
         pool.close()
         pool.join()
 
     named_metrics = {k: v for k, v in zip(LANGUAGES, metrics)}
-    __dump_name_metrics(named_metrics, args.output_dir / "everything.json")
-
-
-def entry_amphoreus(args: argparse.Namespace):
-    output_dir = args.output_dir / "amphoreus"
-    __ensure_output_dir(output_dir)
-
-    tasks = [(output_dir, args.root_dir, lang) for lang in LANGUAGES]
-    pool = mp.Pool(processes=args.num_proc)
-
-    try:
-        metrics = pool.starmap(worker_amphoreus, tasks)
-    finally:
-        pool.close()
-        pool.join()
-
-    named_metrics = {k: v for k, v in zip(LANGUAGES, metrics)}
-    __dump_name_metrics(named_metrics, args.output_dir / "amphoreus.json")
+    __dump_name_metrics(named_metrics, args.output_dir / f"{args.dataset}.json")
 
 
 def entry_vendor(args: argparse.Namespace):
     output_dir = args.output_dir / "vendor"
     __ensure_output_dir(output_dir)
 
-    metrics = worker_vendor(output_dir, args.root_dir)
+    named_metrics = pt_vendor(output_dir, args.root_dir)
 
-    named_metrics = {"vendor": metrics}
     __dump_name_metrics(named_metrics, args.output_dir / "vendor.json")
-
-
-def entry_cyrene(args: argparse.Namespace):
-    output_dir = args.output_dir / "cyrene"
-    __ensure_output_dir(output_dir)
-
-    tasks = [(output_dir, args.root_dir, lang) for lang in LANGUAGES]
-    pool = mp.Pool(processes=args.num_proc)
-
-    try:
-        metrics = pool.starmap(worker_cyrene, tasks)
-    finally:
-        pool.close()
-        pool.join()
-
-    named_metrics = {k: v for k, v in zip(LANGUAGES, metrics)}
-    __dump_name_metrics(named_metrics, args.output_dir / "cyrene.json")
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--dataset",
-        choices=["everything", "amphoreus", "vendor", "cyrene"],
-        required=True,
-    )
     parser.add_argument(
         "--root-dir",
         type=Path,
@@ -266,6 +263,11 @@ def main():
         default=Path("corpora"),
     )
     parser.add_argument(
+        "--dataset",
+        choices=["pt", "amphoreus", "vendor", "sft", "cyrene"],
+        required=True,
+    )
+    parser.add_argument(
         "--num-proc",
         type=int,
         default=4,
@@ -273,16 +275,19 @@ def main():
 
     args = parser.parse_args()
 
-    if args.dataset == "everything":
-        entry_everything(args)
+    if args.dataset == "pt":
+        entry_multilingual(args, pt_honkai_star_rail)
     elif args.dataset == "amphoreus":
-        entry_amphoreus(args)
+        entry_multilingual(args, pt_amphoreus)
     elif args.dataset == "vendor":
         entry_vendor(args)
+    elif args.dataset == "sft":
+        entry_multilingual(args, sft_honkai_star_rail)
     elif args.dataset == "cyrene":
-        entry_cyrene(args)
+        entry_multilingual(args, sft_cyrene)
     else:
         parser.error(f"Unsupported dataset: {args.dataset}")
+
 
 if __name__ == "__main__":
     main()

@@ -24,9 +24,10 @@ class MatchSub:
 
     _skip_warning: Set[str] = {"{大地獣, ネクタール, 数学}"}
 
-    def __init__(self, nickname: str, is_male: bool) -> None:
+    def __init__(self, nickname: str, is_male: bool, mute_warning: bool) -> None:
         self.nickname = nickname
         self.is_male = is_male
+        self.mute_warning = mute_warning
 
     def __call__(self, s: str) -> str:
         s = s.replace(self._nickname_str, self.nickname)
@@ -43,9 +44,10 @@ class MatchSub:
             s = self._female_pattern.sub(r"\1", s)
             s = self._male_pattern.sub("", s)
 
-        raw_warning = self._warning_pattern.findall(s)
-        warning = [w for w in raw_warning if w not in self._skip_warning]
-        if warning:
-            print(warning)
+        if not self.mute_warning:
+            raw_warning = self._warning_pattern.findall(s)
+            warning = [w for w in raw_warning if w not in self._skip_warning]
+            if warning:
+                print(warning)
 
         return s
