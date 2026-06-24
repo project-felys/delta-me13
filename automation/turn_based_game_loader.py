@@ -58,6 +58,9 @@ class TurnBasedGameLoader:
         df["group"] = df["talk_sentence_id"] // 1000
         df = df.fillna(None).sort_values("talk_sentence_id")
 
+        patch = df["group"] == 841050
+        df.loc[patch, "group"] = df.loc[patch, "talk_sentence_id"] // 100
+
         df.values.flags.writeable = False
         return df
 

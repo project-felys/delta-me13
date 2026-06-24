@@ -163,8 +163,9 @@ def __filter_conversations(
     iterable: Iterator[Conversation], max_token: int
 ) -> Iterator[Conversation]:
     for each in iterable:
-        if each.num_tokens <= max_token:
-            yield each
+        if each.num_tokens > max_token or each.is_self_talk():
+            continue
+        yield each
 
 
 def pt_honkai_star_rail(output_dir: Path, root_dir: Path, language: str):
@@ -204,11 +205,22 @@ def sft_honkai_star_rail(output_dir: Path, root_dir: Path, language: str):
     return emit(iterable, output_dir / f"{language}.jsonl", True, f"{language:>3}")
 
 
+def sft_amphoreus(output_dir: Path, root_dir: Path, language: str):
+    setup_global_config(language, "sft")
+    target = SftFactory(root_dir, language).amphoreus.values()
+    iterable = itertools.chain.from_iterable(target)
+    iterable = __clip_conversations(iterable, 10)
+    iterable = __split_conversations(iterable, 4096)
+    iterable = __filter_conversations(iterable, 4096)
+    return emit(iterable, output_dir / f"{language}.jsonl", True, f"{language:>3}")
+
+
 def sft_cyrene(output_dir: Path, root_dir: Path, language: str):
     setup_global_config(language, "cyrene")
     target = SftFactory(root_dir, language).cyrene.values()
     iterable = itertools.chain.from_iterable(target)
     iterable = __clip_conversations(iterable, 10)
+    iterable = __filter_conversations(iterable, 8192)
     return emit(iterable, output_dir / f"{language}.jsonl", False, f"{language:>3}")
 
 
@@ -225,7 +237,7 @@ def __dump_name_metrics(named_metrics: Mapping[str, List[int]], output_path: Pat
 
 
 def entry_multilingual(args: argparse.Namespace, f: Any):
-    output_dir = args.output_dir / args.dataset
+    output_dir: Path = args.output_dir / args.namespace / args.dataset
     __ensure_output_dir(output_dir)
 
     tasks = [(output_dir, args.root_dir, lang) for lang in LANGUAGES]
@@ -238,16 +250,16 @@ def entry_multilingual(args: argparse.Namespace, f: Any):
         pool.join()
 
     named_metrics = {k: v for k, v in zip(LANGUAGES, metrics)}
-    __dump_name_metrics(named_metrics, args.output_dir / f"{args.dataset}.json")
+    __dump_name_metrics(named_metrics, output_dir.parent / f"{args.dataset}.json")
 
 
 def entry_vendor(args: argparse.Namespace):
-    output_dir = args.output_dir / "vendor"
+    output_dir: Path = args.output_dir / args.namespace / "vendor"
     __ensure_output_dir(output_dir)
 
     named_metrics = pt_vendor(output_dir, args.root_dir)
 
-    __dump_name_metrics(named_metrics, args.output_dir / "vendor.json")
+    __dump_name_metrics(named_metrics, output_dir.parent / "vendor.json")
 
 
 def main():
@@ -263,8 +275,13 @@ def main():
         default=Path("corpora"),
     )
     parser.add_argument(
+        "--namespace",
+        choices=["pt", "sft"],
+        required=True,
+    )
+    parser.add_argument(
         "--dataset",
-        choices=["pt", "amphoreus", "vendor", "sft", "cyrene"],
+        choices=["everything", "amphoreus", "vendor", "cyrene"],
         required=True,
     )
     parser.add_argument(
@@ -275,18 +292,21 @@ def main():
 
     args = parser.parse_args()
 
-    if args.dataset == "pt":
-        entry_multilingual(args, pt_honkai_star_rail)
-    elif args.dataset == "amphoreus":
-        entry_multilingual(args, pt_amphoreus)
-    elif args.dataset == "vendor":
-        entry_vendor(args)
-    elif args.dataset == "sft":
-        entry_multilingual(args, sft_honkai_star_rail)
-    elif args.dataset == "cyrene":
-        entry_multilingual(args, sft_cyrene)
-    else:
-        parser.error(f"Unsupported dataset: {args.dataset}")
+    match args.namespace, args.dataset:
+        case "pt", "everything":
+            entry_multilingual(args, pt_honkai_star_rail)
+        case "pt", "amphoreus":
+            entry_multilingual(args, pt_amphoreus)
+        case "pt", "vendor":
+            entry_vendor(args)
+        case "sft", "everything":
+            entry_multilingual(args, sft_honkai_star_rail)
+        case "sft", "amphoreus":
+            entry_multilingual(args, sft_amphoreus)
+        case "sft", "cyrene":
+            entry_multilingual(args, sft_cyrene)
+        case _:
+            parser.error(f"Unsupported dataset: {args.namespace} {args.dataset}")
 
 
 if __name__ == "__main__":

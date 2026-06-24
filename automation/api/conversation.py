@@ -53,6 +53,9 @@ class Conversation(BaseModel, OutTrait):
 
     rounds: Tuple[Round, ...]
 
+    def is_self_talk(self) -> bool:
+        return len(self.rounds) == 1 and not self.rounds[0].user
+
     @property
     def num_tokens(self) -> int:
         return sum(x.num_tokens for x in self.rounds)
@@ -85,11 +88,9 @@ class Conversation(BaseModel, OutTrait):
         return Conversation(rounds=tuple(x.clip(max_user_lines) for x in self.rounds))
 
     def to_jsonl(self, use_system: bool) -> Mapping[str, Any]:
-        name = self.rounds[0].assistant[0].pretty_name
+        messages = []
         if use_system:
-            assert name
-        else:
-            name = ""
-        messages = [{"role": "system", "content": name}]
+            name = self.rounds[0].assistant[0].pretty_name
+            messages.append({"role": "system", "content": name})
         messages.extend(line for round in self.rounds for line in round.to_jsonl())
         return {"messages": messages}
