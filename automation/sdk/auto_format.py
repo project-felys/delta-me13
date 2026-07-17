@@ -1,6 +1,7 @@
 from typing import Callable
 
 from automation.api.sentence import Sentence
+from automation.patch.tts import load_patch
 
 
 def get_retain_sentence_name_auto_format(
@@ -53,3 +54,12 @@ def get_cyrene_whitelist_auto_format(language: str) -> Callable[[Sentence], str]
             return f"{lparen}{text}{rparen}"
 
     return cyrene_whitelist
+
+
+def get_patch_auto_format(language: str) -> Callable[[Sentence], str]:
+    patch_mapping = load_patch(language)
+
+    def patch(sentence: Sentence) -> str:
+        return patch_mapping.get(sentence.text_hash, sentence.text)
+
+    return patch

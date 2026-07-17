@@ -43,7 +43,7 @@ def generate_all(
         attn_implementation="flash_attention_2",
     )
 
-    test_dir = Path(model_path).parent / "test"
+    test_dir = Path(model_path) / "test"
     test_dir.mkdir(parents=True, exist_ok=True)
     saved_dir = str(test_dir)
 

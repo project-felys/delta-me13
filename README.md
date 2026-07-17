@@ -53,11 +53,6 @@ python3 main.py audio \
     --turn-based-game-data-dir $REPO \
     --unpacked-audio-dir audio \
     --dataset cyrene
-
-# Dereverberation
-python3 tts.py \
-    --jsonl corpora/tts/cyrene/English.jsonl \
-    --output-dir cyrene
 ```
 
 ## License

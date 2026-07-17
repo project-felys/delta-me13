@@ -13,17 +13,18 @@ import tqdm
 
 from automation.api.audio import Audio
 from automation.api.conversation import Conversation
+from automation.api.sentence import Sentence
 from automation.api.out_trait import OutTrait
 from automation.api.paragraph import Paragraph
-from automation.factories.audio import AudioFactory
+from automation.factories.tts import AudioFactory
 from automation.factories.pt import PtFactory
 from automation.factories.sft import SftFactory
 from automation.factories.vendor import VendorFactory
 from automation.sdk.auto_format import (
     get_cyrene_whitelist_auto_format,
+    get_patch_auto_format,
     get_retain_sentence_name_auto_format,
 )
-from automation.sdk.config import sentence_global_config
 from automation.sdk.match_sub import (
     get_fast_felysneko_match_sub,
     get_felysneko_match_sub,
@@ -125,7 +126,7 @@ def __convert_audio(
 def pt_everything(
     output_dir: Path, turn_based_game_data_dir: Path, language: str
 ) -> List[int]:
-    sentence_global_config(
+    Sentence.global_config(
         auto_format=get_retain_sentence_name_auto_format(language),
         token_counter=get_qwen3_token_counter(),
         match_sub=get_felysneko_match_sub(language),
@@ -140,7 +141,7 @@ def pt_everything(
 def pt_amphoreus(
     output_dir: Path, turn_based_game_data_dir: Path, language: str
 ) -> List[int]:
-    sentence_global_config(
+    Sentence.global_config(
         auto_format=get_retain_sentence_name_auto_format(language),
         token_counter=get_qwen3_token_counter(),
         match_sub=get_felysneko_match_sub(language),
@@ -153,7 +154,7 @@ def pt_amphoreus(
 
 
 def pt_vendor(output_dir: Path, vendor_dir: Path):
-    sentence_global_config(
+    Sentence.global_config(
         auto_format=None,
         token_counter=get_qwen3_token_counter(),
         match_sub=get_fast_felysneko_match_sub(),
@@ -173,7 +174,7 @@ def pt_vendor(output_dir: Path, vendor_dir: Path):
 def sft_everything(
     output_dir: Path, turn_based_game_data_dir: Path, language: str
 ) -> List[int]:
-    sentence_global_config(
+    Sentence.global_config(
         auto_format=None,
         token_counter=get_qwen3_token_counter(),
         match_sub=get_felysneko_match_sub(language),
@@ -192,7 +193,7 @@ def sft_everything(
 def sft_amphoreus(
     output_dir: Path, turn_based_game_data_dir: Path, language: str
 ) -> List[int]:
-    sentence_global_config(
+    Sentence.global_config(
         auto_format=None,
         token_counter=get_qwen3_token_counter(),
         match_sub=get_felysneko_match_sub(language),
@@ -211,7 +212,7 @@ def sft_amphoreus(
 def sft_cyrene(
     output_dir: Path, turn_based_game_data_dir: Path, language: str
 ) -> List[int]:
-    sentence_global_config(
+    Sentence.global_config(
         auto_format=get_cyrene_whitelist_auto_format(language),
         token_counter=get_qwen3_token_counter(),
         match_sub=get_felysneko_match_sub(language),
@@ -233,8 +234,8 @@ def tts_cyrene(
     language: str,
     num_threads: int,
 ) -> Iterator[Audio]:
-    sentence_global_config(
-        auto_format=None,
+    Sentence.global_config(
+        auto_format=get_patch_auto_format(language),
         token_counter=None,
         match_sub=get_slow_path_only_match_sub(),
     )

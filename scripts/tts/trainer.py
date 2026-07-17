@@ -40,19 +40,15 @@ def train_common(
     seed_everything(seed)
 
     # --- hard-coded training configuration ---
-    torch_dtype = torch.bfloat16
-    attn_impl = "flash_attention_2"
     max_length = 4096
     split_dataset_ratio = 0.0
     load_from_cache_file = True
     dataset_num_proc = 1
-    dataloader_num_workers = 4
-    lr_scheduler_kwargs = {"min_lr": lr * min_lr_factor}
     output_model_path = os.path.abspath(os.path.expanduser(output_model_path))
 
     # --- model + processor + template ---
     model, processor = get_model_processor(
-        init_model_path, torch_dtype=torch_dtype, attn_impl=attn_impl
+        init_model_path, torch_dtype=torch.bfloat16, attn_impl="flash_attention_2"
     )
     template = get_template(processor, max_length=max_length)
     template.set_mode("train")
@@ -80,17 +76,19 @@ def train_common(
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
         lr_scheduler_type="cosine_with_min_lr",
-        lr_scheduler_kwargs=lr_scheduler_kwargs,
+        lr_scheduler_kwargs={"min_lr": lr * min_lr_factor},
         warmup_ratio=warmup_ratio,
         optim="adamw_torch_fused",
         bf16=True,
         report_to=["tensorboard"],
+        weight_decay=0.01,
         logging_first_step=True,
         save_strategy="no",
         save_only_model=True,
         gradient_accumulation_steps=gradient_accumulation_steps,
         num_train_epochs=num_epochs,
-        dataloader_num_workers=dataloader_num_workers,
+        use_liger_kernel=True,
+        dataloader_num_workers=4,
         seed=seed,
         data_seed=seed,
     )
@@ -199,7 +197,9 @@ def main() -> None:
     parser.add_argument("--train-jsonl", required=True)
     parser.add_argument("--speaker-name", default="cyrene")
     parser.add_argument("--init-model-path", default="Qwen/Qwen3-TTS-12Hz-0.6B-Base")
-    parser.add_argument("--output-model-path", default="/root/autodl-tmp/output/tts/test")
+    parser.add_argument(
+        "--output-model-path", default="/root/autodl-tmp/output/tts/test"
+    )
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--gradient-accumulation-steps", type=int, default=2)
     parser.add_argument("--num-epochs", type=int, default=4)

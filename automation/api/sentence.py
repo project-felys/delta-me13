@@ -4,6 +4,18 @@ from typing import Callable
 from pydantic import BaseModel, ConfigDict
 
 
+def default_auto_format(sentence: Sentence) -> str:
+    return sentence.text
+
+
+def default_match_sub(s: str) -> str:
+    return s
+
+
+def default_token_counter(s: str) -> int:
+    return len(s)
+
+
 class Sentence(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -39,26 +51,20 @@ class Sentence(BaseModel):
         s = self.pretty_string
         return self.__get_token_counter_func(s)
 
-    @staticmethod
-    def __auto_format(sentence: Sentence) -> str:
-        return sentence.text
+    __auto_format = staticmethod(default_auto_format)
+    __match_sub_func = staticmethod(default_match_sub)
+    __get_token_counter_func = staticmethod(default_token_counter)
 
     @classmethod
-    def set_auto_format_func(cls, backend: Callable[[Sentence], str]) -> None:
-        cls.__auto_format = staticmethod(backend)
-
-    @staticmethod
-    def __match_sub_func(s: str) -> str:
-        return s
-
-    @classmethod
-    def set_match_sub_func(cls, backend: Callable[[str], str]) -> None:
-        cls.__match_sub_func = staticmethod(backend)
-
-    @staticmethod
-    def __get_token_counter_func(s: str) -> int:
-        return len(s)
-
-    @classmethod
-    def set_token_counter_func(cls, backend: Callable[[str], int]) -> None:
-        cls.__get_token_counter_func = staticmethod(backend)
+    def global_config(
+        cls,
+        *,
+        auto_format: Callable[[Sentence], str] | None,
+        match_sub: Callable[[str], str] | None,
+        token_counter: Callable[[str], int] | None,
+    ) -> None:
+        cls.__auto_format = staticmethod(auto_format or default_auto_format)
+        cls.__match_sub_func = staticmethod(match_sub or default_match_sub)
+        cls.__get_token_counter_func = staticmethod(
+            token_counter or default_token_counter
+        )

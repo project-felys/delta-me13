@@ -19,23 +19,19 @@ def _build_search_space(
     match tuner_type:
         case "full":
             return {
-                "lr": optuna.distributions.FloatDistribution(1e-6, 1e-4, log=True),
-                "min_lr_factor": optuna.distributions.FloatDistribution(0.0, 1.0),
-                "batch_size": optuna.distributions.CategoricalDistribution([2, 4, 8]),
-                "num_epochs": optuna.distributions.IntDistribution(1, 8),
+                "lr": optuna.distributions.FloatDistribution(5e-6, 5e-5, log=True),
+                "min_lr_factor": optuna.distributions.FloatDistribution(0.1, 1.0),
+                "batch_size": optuna.distributions.CategoricalDistribution([4, 8, 16]),
+                "num_epochs": optuna.distributions.IntDistribution(2, 6),
             }
         case "lora":
             return {
-                "lr": optuna.distributions.FloatDistribution(5e-6, 5e-4, log=True),
-                "min_lr_factor": optuna.distributions.FloatDistribution(0.0, 1.0),
-                "batch_size": optuna.distributions.CategoricalDistribution([2, 4, 8]),
-                "num_epochs": optuna.distributions.IntDistribution(1, 8),
-                "lora_rank": optuna.distributions.CategoricalDistribution(
-                    [4, 8, 16, 32]
-                ),
-                "lora_alpha": optuna.distributions.CategoricalDistribution(
-                    [16, 32, 64]
-                ),
+                "lr": optuna.distributions.FloatDistribution(5e-5, 5e-4, log=True),
+                "min_lr_factor": optuna.distributions.FloatDistribution(0.1, 1.0),
+                "batch_size": optuna.distributions.CategoricalDistribution([4, 8, 16]),
+                "num_epochs": optuna.distributions.IntDistribution(2, 6),
+                "lora_rank": optuna.distributions.CategoricalDistribution([4, 8, 16]),
+                "lora_alpha": optuna.distributions.CategoricalDistribution([8, 16, 32]),
             }
         case _:
             raise ValueError(f"Unknown tuner_type: {tuner_type!r}")
@@ -45,19 +41,19 @@ def _sample_params(trial: optuna.Trial, tuner_type: str) -> dict[str, Any]:
     match tuner_type:
         case "full":
             return {
-                "lr": trial.suggest_float("lr", 1e-6, 1e-4, log=True),
-                "min_lr_factor": trial.suggest_float("min_lr_factor", 0.0, 1.0),
-                "batch_size": trial.suggest_categorical("batch_size", [2, 4, 8]),
-                "num_epochs": trial.suggest_int("num_epochs", 1, 8),
+                "lr": trial.suggest_float("lr", 5e-6, 5e-5, log=True),
+                "min_lr_factor": trial.suggest_float("min_lr_factor", 0.1, 1.0),
+                "batch_size": trial.suggest_categorical("batch_size", [4, 8, 16]),
+                "num_epochs": trial.suggest_int("num_epochs", 2, 6),
             }
         case "lora":
             return {
-                "lr": trial.suggest_float("lr", 5e-6, 5e-4, log=True),
-                "min_lr_factor": trial.suggest_float("min_lr_factor", 0.0, 1.0),
-                "batch_size": trial.suggest_categorical("batch_size", [2, 4, 8]),
-                "num_epochs": trial.suggest_int("num_epochs", 1, 8),
-                "lora_rank": trial.suggest_categorical("lora_rank", [4, 8, 16, 32]),
-                "lora_alpha": trial.suggest_categorical("lora_alpha", [16, 32, 64]),
+                "lr": trial.suggest_float("lr", 5e-5, 5e-4, log=True),
+                "min_lr_factor": trial.suggest_float("min_lr_factor", 0.1, 1.0),
+                "batch_size": trial.suggest_categorical("batch_size", [4, 8, 16]),
+                "num_epochs": trial.suggest_int("num_epochs", 2, 6),
+                "lora_rank": trial.suggest_categorical("lora_rank", [4, 8, 16]),
+                "lora_alpha": trial.suggest_categorical("lora_alpha", [8, 16, 32]),
             }
         case _:
             raise ValueError(f"Unknown tuner_type: {tuner_type!r}")
@@ -79,7 +75,7 @@ def _run_trial_training(
                 speaker_name=speaker_name,
                 init_model_path=init_model_path,
                 output_model_path=output_model_path,
-                batch_size=params["batch_size"],
+                batch_size=params["batch_size"] // 2,
                 gradient_accumulation_steps=2,
                 num_epochs=params["num_epochs"],
                 lr=params["lr"],
@@ -94,7 +90,7 @@ def _run_trial_training(
                 init_model_path=init_model_path,
                 output_model_path=output_model_path,
                 batch_size=params["batch_size"],
-                gradient_accumulation_steps=2,
+                gradient_accumulation_steps=1,
                 num_epochs=params["num_epochs"],
                 lr=params["lr"],
                 min_lr_factor=params["min_lr_factor"],
@@ -113,7 +109,7 @@ def _create_study(
     n_trials: int,
     seed: int,
 ) -> tuple[optuna.Study, int]:
-    sampler = optuna.samplers.TPESampler(seed=seed, n_startup_trials=30)
+    sampler = optuna.samplers.TPESampler(seed=seed, n_startup_trials=25)
     study = optuna.create_study(
         directions=["minimize", "maximize", "minimize"],
         sampler=sampler,
@@ -174,7 +170,8 @@ def _save_pareto_front(study: optuna.Study, results_path: Path) -> None:
 
 
 def bo_loop(args: argparse.Namespace) -> None:
-    results_path = Path(args.output_model_path) / "bo_results.jsonl"
+    output_root = Path(args.output_model_path)
+    results_path = output_root / "bo_results.jsonl"
     results_path.parent.mkdir(parents=True, exist_ok=True)
 
     eval_data: list[dict[str, str]] = prepare_eval_data(args.test_jsonl)
@@ -188,16 +185,17 @@ def bo_loop(args: argparse.Namespace) -> None:
 
     with open(results_path, "a", encoding="utf-8") as f:
         for _ in range(n_remaining):
-            trial = study.ask()
+            trial = study.ask(fixed_distributions=search_space)
             params = _sample_params(trial, args.tuner_type)
 
+            trial_output_path = str(output_root / str(trial.number))
             last_ckpt_dir = _run_trial_training(
                 tuner_type=args.tuner_type,
                 params=params,
                 train_jsonl=args.train_jsonl,
                 speaker_name=args.speaker_name,
                 init_model_path=args.init_model_path,
-                output_model_path=args.output_model_path,
+                output_model_path=trial_output_path,
                 seed=args.seed,
             )
 
@@ -250,7 +248,7 @@ def main() -> None:
         "--init-model-path", type=str, default="Qwen/Qwen3-TTS-12Hz-0.6B-Base"
     )
     parser.add_argument("--output-model-path", type=str, default="output")
-    parser.add_argument("--n-trials", type=int, default=60)
+    parser.add_argument("--n-trials", type=int, default=50)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 

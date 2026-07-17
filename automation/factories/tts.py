@@ -27,7 +27,7 @@ class AudioFactory(UnpackedAudioLanguageLoader, TurnBasedGameDataLoader):
         TurnBasedGameDataLoader.__init__(
             self, turn_based_game_data_dir, LANGUAGE_ABBREVIATION_MAP[language]
         )
-        self.__unpacked_audio_language = language
+        self.__language = language
 
     @property
     def cyrene(self) -> Mapping[str, Iterator[Audio]]:
@@ -44,13 +44,23 @@ class AudioFactory(UnpackedAudioLanguageLoader, TurnBasedGameDataLoader):
             "voice_atlas": self.build_voice_atlas(1415),
         }
 
-    def __voice_path_to_id(self, voice_path: str) -> int:
-        wem_path = f"{self.__unpacked_audio_language}/voice/{voice_path}.wem"
+    def voice_path_to_id(self, voice_path: str) -> int:
+        wem_path = f"{self.__language}/voice/{voice_path}.wem"
         return fnv1_64(wem_path.lower())
 
-    def __audio_event_to_id(self, audio_event: str) -> int:
+    def audio_event_to_id(self, audio_event: str) -> int:
         event_id = fnv1_32(audio_event.lower())
         return self.event_id_to_first_bank_map[event_id]
+
+    def text_hash_to_sentence(self, text_hash: int) -> Sentence:
+        text = self.get_text_unwrap(text_hash)
+        return Sentence(
+            talk_sentence_id=None,
+            name=None,
+            name_hash=None,
+            text=text,
+            text_hash=text_hash,
+        )
 
     def __process_didx_data(
         self, iterable: Iterable[Tuple[int, int]]
@@ -60,13 +70,12 @@ class AudioFactory(UnpackedAudioLanguageLoader, TurnBasedGameDataLoader):
 
         id_to_name_sentence_map = {}
         for text_hash, voice_id in iterable:
-            text = self.get_text_unwrap(text_hash)
-            sentence = Sentence.plain_text(text)
+            sentence = self.text_hash_to_sentence(text_hash)
 
             voice_path = self.voice_id_to_voice_path_map[voice_id]
             for postfix in ["", "_f", "_m"]:
                 voice_path_variant = f"{voice_path}{postfix}"
-                key = self.__voice_path_to_id(voice_path_variant)
+                key = self.voice_path_to_id(voice_path_variant)
                 if key in existing_eids:
                     id_to_name_sentence_map[key] = voice_path_variant, sentence
                     break
@@ -84,10 +93,8 @@ class AudioFactory(UnpackedAudioLanguageLoader, TurnBasedGameDataLoader):
     ) -> Iterator[Audio]:
         id_to_name_sentence_map = {}
         for text_hash, audio_event in iterable:
-            text = self.get_text_unwrap(text_hash)
-            sentence = Sentence.plain_text(text)
-
-            key = self.__audio_event_to_id(audio_event)
+            sentence = self.text_hash_to_sentence(text_hash)
+            key = self.audio_event_to_id(audio_event)
             id_to_name_sentence_map[key] = audio_event, sentence
 
         df = self.banks_table

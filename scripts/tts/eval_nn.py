@@ -248,22 +248,20 @@ def main():
         description="Evaluate TTS quality with neural metrics"
     )
     parser.add_argument(
-        "--ground_truth_jsonl",
+        "--ground-truth-jsonl",
         type=str,
         required=True,
-        help="JSONL file with reference audio entries (keys: audio, text)",
     )
     parser.add_argument(
-        "--test_dir",
+        "--test-dir",
         type=str,
+        nargs="+",
         required=True,
-        help="Directory of test .wav files to evaluate (stems must match ref entries)",
     )
     parser.add_argument(
         "--language",
         type=str,
         default="Chinese",
-        help="Language for ASR transcription (default: Chinese)",
     )
     args = parser.parse_args()
 
@@ -274,10 +272,11 @@ def main():
     ref_audio_paths = [Path(e["audios"][0]) for e in ref_entries]
     evaluator = EvalNN(ref_audio_paths, language=args.language)
 
-    wav_paths = sorted(Path(args.test_dir).glob("*.wav"))
-    stems = [p.stem for p in wav_paths]
-    mean = evaluate_model(args.test_dir, stems, evaluator)
-    print(mean[["utmos_mse", "cosine_sim", "wer", "mel_cosine", "mfcc_cosine"]])
+    for test_dir in args.test_dir:
+        wav_paths = sorted(Path(test_dir).glob("*.wav"))
+        stems = [p.stem for p in wav_paths]
+        metrics = evaluate_model(test_dir, stems, evaluator)
+        print(metrics)
 
 
 if __name__ == "__main__":
