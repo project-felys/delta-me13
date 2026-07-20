@@ -66,7 +66,7 @@ class TurnBasedGameDataLoader:
         mask = df["talk_sentence_text"].isin(self.__text_map)
         df = df[mask]
         df["group"] = df["talk_sentence_id"] // 1000
-        df = df.fillna(None).sort_values("talk_sentence_id")
+        df = df.sort_values("talk_sentence_id")
 
         patch = df["group"].isin(
             {

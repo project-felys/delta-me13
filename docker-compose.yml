@@ -1,25 +1,27 @@
 services:
   llm:
     image: vllm/vllm-openai:latest
+    environment:
+      - CUDA_DEVICE_ORDER=PCI_BUS_ID
+      - CUDA_VISIBLE_DEVICES=0
     command:
       [
+        "/models/PhiLia093-LLM",
         "--trust-remote-code",
         "--language-model-only",
-        "--model",
-        "/models/PhiLia093-LLM",
         "--served-model-name",
         "PhiLia093-LLM",
         "--max-model-len",
         "4096",
         "--max-num-seqs",
-        "4",
+        "16",
         "--default-chat-template-kwargs",
         '{"enable_thinking": false}',
         "--gpu-memory-utilization",
         "0.80",
       ]
     ports:
-      - "8000:8000"
+      - "8001:8000"
     volumes:
       - "E:/Model:/models"
     ipc: host
@@ -34,25 +36,25 @@ services:
 
   tts:
     image: vllm/vllm-omni:latest
+    environment:
+      - CUDA_DEVICE_ORDER=PCI_BUS_ID
+      - CUDA_VISIBLE_DEVICES=1
     command:
       [
         "vllm",
         "serve",
+        "/models/PhiLia093-TTS",
         "--omni",
         "--trust-remote-code",
-        "--model",
-        "/models/PhiLia093-TTS",
         "--served-model-name",
         "PhiLia093-TTS",
         "--max-model-len",
-        "1024",
+        "4096",
         "--max-num-seqs",
-        "4",
-        "--gpu-memory-utilization",
-        "0.80",
+        "16",
       ]
     ports:
-      - "8000:8000"
+      - "8002:8000"
     volumes:
       - "E:/Model:/models"
     ipc: host

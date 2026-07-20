@@ -66,7 +66,9 @@ def main():
 
     final_lines = [json.dumps(line, ensure_ascii=False) for line in final_lines]
 
-    with open(args.output_dir / args.input_jsonl.stem, "w") as f:
+    output_jsonl = args.output_dir / args.input_jsonl.name
+    output_jsonl.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_jsonl, "w", encoding="utf-8") as f:
         for line in final_lines:
             f.writelines(line + "\n")
 

@@ -66,11 +66,8 @@ def main():
             }
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
-    print(f"[done] wrote {len(entries)} lines -> {out_jsonl}", file=sys.stderr)
-    print(
-        f"       ref_audio -> {out_ref} (from {longest_name}, {longest_dur:.2f}s)",
-        file=sys.stderr,
-    )
+    print(f"[done] wrote {len(entries)} lines -> {out_jsonl}")
+    print(f"ref_audio -> {out_ref} (from {longest_name}, {longest_dur:.2f}s)")
 
 
 if __name__ == "__main__":
