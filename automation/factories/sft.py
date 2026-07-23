@@ -1,6 +1,5 @@
-import itertools
 from pathlib import Path
-from typing import Iterator, Mapping, Set
+from typing import Iterator, Set
 
 import pandas as pd
 
@@ -13,83 +12,6 @@ class SftFactory(TurnBasedGameDataLoader):
         self, turn_based_game_data_dir: Path, turn_based_game_data_language: str
     ):
         super().__init__(turn_based_game_data_dir, turn_based_game_data_language)
-
-    @property
-    def everything(self) -> Mapping[str, Iterator[Conversation]]:
-        name_hash_set = set(
-            self.talk_sentence_config_table["textmap_talk_sentence_name"].unique()
-        )
-        voice_atlas_list = [
-            self.build_voice_atlas(avatar_id)
-            for avatar_id in self.avatar_id_to_name_map.keys()
-        ]
-
-        return {
-            "talk_sentence_config": self.build_talk_sentence_config_everyone_in_group(
-                name_hash_set
-            ),
-            "voice_atlas": itertools.chain(*voice_atlas_list),
-        }
-
-    @property
-    def amphoreus(self) -> Mapping[str, Iterator[Conversation]]:
-        avatar_id_to_name_hash = {
-            1402: 8347254212154585286,  # 阿格莱雅
-            1403: 12286569378821401368,  # 缇宝
-            1404: 12172129776731566058,  # 万敌
-            1405: 7940279852062189396,  # 那刻夏
-            1406: 8212064977546372217,  # 赛飞儿
-            1407: 3884071463804277504,  # 遐蝶
-            1408: 1410515507232658695,  # 白厄
-            1409: 11373702895576004432,  # 风堇
-            1410: 6101302014640441508,  # 海瑟音
-            1412: 16138667287721516920,  # 刻律德菈
-            1413: 6287657147795310895,  # 长夜月
-            1414: 11464334189321098131,  # 丹恒
-            1415: 2309313067306506373,  # 昔涟
-        }
-        extra_name_hashes = {
-            11001695012879251917,  # 迷迷
-            16450988707457331866,  # 来古士
-        }
-
-        name_hash_set = set(avatar_id_to_name_hash.values()) | extra_name_hashes
-        voice_atlas_list = [
-            self.build_voice_atlas(avatar_id)
-            for avatar_id in avatar_id_to_name_hash.keys()
-        ]
-
-        return {
-            "talk_sentence_config": self.build_talk_sentence_config_everyone_in_group(
-                name_hash_set
-            ),
-            "voice_atlas": itertools.chain(*voice_atlas_list),
-        }
-
-    @property
-    def cyrene(self) -> Mapping[str, Iterator[Conversation]]:
-        name_hashes = [
-            2309313067306506373,  # 昔涟
-            11001695012879251917,  # 迷迷
-            6462539533232001276,  # 少女的声音
-            402745232924048698,  # 「记忆的花」
-            14378608167795068022,  # 「记忆的花蕾」
-            122935082492335341,  # 「记忆的幼芽」
-            11263148736238834705,  # 「记忆的种子」
-            6846009442988187041,  # {NICKNAME}&昔涟
-            4455374036049186635,  # 昔涟
-            13483973725572441939,  # 「另一位作者♪」
-            12560857117710338840,  # 往昔的涟漪
-        ]
-        talk_sentence_config_list = [
-            self.build_talk_sentence_config_single_character(name_hash)
-            for name_hash in name_hashes
-        ]
-
-        return {
-            "talk_sentence_config": itertools.chain(*talk_sentence_config_list),
-            "voice_atlas": self.build_voice_atlas(1415),  # 昔涟
-        }
 
     def build_talk_sentence_config_single_character(
         self, name_hash: int

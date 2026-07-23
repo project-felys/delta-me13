@@ -1,6 +1,8 @@
+import functools
 from pathlib import Path
-import re
-from typing import Iterable, Iterator, Mapping, Pattern, Tuple
+from typing import Iterable, Iterator, List, Pattern, Tuple
+
+import pandas as pd
 
 from automation.api.audio import Audio
 from automation.api.sentence import Sentence
@@ -16,7 +18,7 @@ LANGUAGE_ABBREVIATION_MAP = {
 }
 
 
-class AudioFactory(UnpackedAudioLanguageLoader, TurnBasedGameDataLoader):
+class TtsFactory(UnpackedAudioLanguageLoader, TurnBasedGameDataLoader):
     def __init__(
         self,
         unpacked_audio_language_dir: Path,
@@ -28,21 +30,6 @@ class AudioFactory(UnpackedAudioLanguageLoader, TurnBasedGameDataLoader):
             self, turn_based_game_data_dir, LANGUAGE_ABBREVIATION_MAP[language]
         )
         self.__language = language
-
-    @property
-    def cyrene(self) -> Mapping[str, Iterator[Audio]]:
-        voice_path_regex = re.compile(
-            r"(?:"
-            r"(?:chapter4|side4)_[^_]+"
-            r"|vo_ambient_w4_\w+_\w+"
-            r")"
-            r"_(?:cyrene|cyrenejiyi|cyrenely|wangxi|zuozhe)_\d+"
-        )
-
-        return {
-            "talk_sentence_config": self.build_talk_sentence_config(voice_path_regex),
-            "voice_atlas": self.build_voice_atlas(1415),
-        }
 
     def voice_path_to_id(self, voice_path: str) -> int:
         wem_path = f"{self.__language}/voice/{voice_path}.wem"
@@ -106,25 +93,76 @@ class AudioFactory(UnpackedAudioLanguageLoader, TurnBasedGameDataLoader):
             path_to_wem = Path(wem_dir) / f"{wem_ref_id:08x}.wem"
             yield Audio(name=name, sentence=sentence, wem_path=path_to_wem)
 
-    def build_talk_sentence_config(self, voice_path_regex: Pattern) -> Iterator[Audio]:
-        voice_id_set = {
+    @functools.cache
+    def compute_voice_id_set(self, voice_path_regex: Pattern) -> pd.DataFrame:
+        return {
             voice_id
             for voice_id, voice_path in self.voice_id_to_voice_path_map.items()
             if voice_path_regex.search(voice_path)
         }
+
+    def build_talk_sentence_config(self, voice_path_regex: Pattern) -> Iterator[Audio]:
+        voice_id_set = self.compute_voice_id_set(voice_path_regex)
+
         df = self.talk_sentence_config_table
         mask = df["voice_id"].isin(voice_id_set)
-        df = df.loc[mask, ["talk_sentence_text", "voice_id"]]
+        df = df[mask]
 
-        yield from self.__process_didx_data(df.itertuples(index=False))
+        yield from self.__process_didx_data(
+            df[["talk_sentence_text", "voice_id"]].itertuples(index=False)
+        )
 
     def build_voice_atlas(self, avatar_id: int) -> Iterator[Audio]:
         df = self.voice_atlas_table
         mask = df["avatar_id"] == avatar_id
         df = df[mask]
 
-        didx_df = df[["voice_m_hash", "audio_id"]].dropna()
-        banks_df = df[["voice_m_hash", "audio_event"]].dropna()
+        yield from self.__process_didx_data(
+            df[["voice_m_hash", "audio_id"]].dropna().itertuples(index=False)
+        )
 
-        yield from self.__process_didx_data(didx_df.itertuples(index=False))
-        yield from self.__process_banks_data(banks_df.itertuples(index=False))
+        yield from self.__process_banks_data(
+            df[["voice_m_hash", "audio_event"]].dropna().itertuples(index=False)
+        )
+
+    def compute_talk_sentence_config_merged_text_hash(
+        self, voice_path_regex: Pattern
+    ) -> List[List[int]]:
+        voice_id_set = self.compute_voice_id_set(voice_path_regex)
+
+        df = self.talk_sentence_config_table.fillna(0)
+        voice_id_mask = df["voice_id"].isin(voice_id_set)
+        group_id_set = set(df.loc[voice_id_mask, "group"])
+        name_hash_set = set(df.loc[voice_id_mask, "textmap_talk_sentence_name"])
+        mask = df["group"].isin(group_id_set)
+
+        fields = [
+            "voice_id",
+            "textmap_talk_sentence_name",
+            "talk_sentence_text",
+            "group",
+        ]
+
+        result = []
+        for _, sub_df in df.loc[mask, fields].groupby("group"):
+            current_name_hash = None
+            buffer = []
+            for voice_id, name_hash, text_hash, _ in sub_df.itertuples(index=False):
+                if name_hash == current_name_hash and voice_id in voice_id_set:
+                    buffer.append(text_hash)
+                    continue
+
+                if buffer:
+                    result.append(buffer)
+                    buffer = []
+
+                current_name_hash = None
+
+                if name_hash in name_hash_set and voice_id in voice_id_set:
+                    current_name_hash = name_hash
+                    buffer.append(text_hash)
+
+            if buffer:
+                result.append(buffer)
+
+        return result

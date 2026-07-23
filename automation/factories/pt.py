@@ -2,7 +2,7 @@ from collections import defaultdict
 import itertools
 from pathlib import Path
 import re
-from typing import Iterable, Mapping, Iterator
+from typing import Iterable, Iterator
 
 import pandas as pd
 
@@ -32,66 +32,6 @@ class PtFactory(TurnBasedGameDataLoader):
         self, turn_based_game_data_dir: Path, turn_based_game_data_language: str
     ):
         super().__init__(turn_based_game_data_dir, turn_based_game_data_language)
-
-    @property
-    def everything(self) -> Mapping[str, Iterator[Paragraph]]:
-        return {
-            "talk_sentence_config": self.build_talk_sentence_config(),
-            "book_series_config": self.build_book_series_config(),
-            "story_atlas": self.build_story_atlas(),
-            "voice_atlas": self.build_voice_atlas(),
-            "noun_atlas": self.build_noun_atlas(),
-            "chronicle_conclusion": self.build_chronicle_conclusion(),
-            "tarot_mails": self.build_tarot_mails(),
-            "tarot_book_sentence": self.build_tarot_book_sentence(),
-            "tarot_wiki_data": self.build_tarot_wiki_data(),
-        }
-
-    @property
-    def amphoreus(self) -> Mapping[str, Iterator[Paragraph]]:
-        avatar_id_to_name_hash = {
-            1402: 8347254212154585286,  # 阿格莱雅
-            1403: 12286569378821401368,  # 缇宝
-            1404: 12172129776731566058,  # 万敌
-            1405: 7940279852062189396,  # 那刻夏
-            1406: 8212064977546372217,  # 赛飞儿
-            1407: 3884071463804277504,  # 遐蝶
-            1408: 1410515507232658695,  # 白厄
-            1409: 11373702895576004432,  # 风堇
-            1410: 6101302014640441508,  # 海瑟音
-            1412: 16138667287721516920,  # 刻律德菈
-            1413: 6287657147795310895,  # 长夜月
-            1414: 11464334189321098131,  # 丹恒
-            1415: 2309313067306506373,  # 昔涟
-        }
-        extra_name_hashes = [
-            11001695012879251917,  # 迷迷
-            16450988707457331866,  # 来古士
-        ]
-
-        return {
-            "talk_sentence_config": self.build_talk_sentence_config(
-                list(avatar_id_to_name_hash.values()) + extra_name_hashes
-            ),
-            "chronicle_conclusion": self.build_chronicle_conclusion(
-                [
-                    104,  # 主线
-                    204,  # 支线
-                    803,  # 活动
-                ]
-            ),
-            "story_atlas": self.build_story_atlas(avatar_id_to_name_hash.keys()),
-            "voice_atlas": self.build_voice_atlas(avatar_id_to_name_hash.keys()),
-            "book_series_config": self.build_book_series_config(
-                [
-                    5,  # 翁法罗斯
-                ]
-            ),
-            "noun_atlas": self.build_noun_atlas(),  # 智库（专有名词、星神、派系）
-            "tarot_mails": self.build_tarot_mails(),  # 邮箱.exe
-            "tarot_book_sentence": self.build_tarot_book_sentence(),  # 翁法罗斯英雄纪.exe
-            "tarot_wiki_data": self.build_tarot_wiki_data(),  # δ-me13.exe
-        }
 
     def build_talk_sentence_config(self, name_hashes: Iterable[int] | None = None):
         df = self.talk_sentence_config_table
