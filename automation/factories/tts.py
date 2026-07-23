@@ -130,7 +130,7 @@ class TtsFactory(UnpackedAudioLanguageLoader, TurnBasedGameDataLoader):
     ) -> List[List[int]]:
         voice_id_set = self.compute_voice_id_set(voice_path_regex)
 
-        df = self.talk_sentence_config_table.fillna(0)
+        df = self.talk_sentence_config_table.fillna(None)
         voice_id_mask = df["voice_id"].isin(voice_id_set)
         group_id_set = set(df.loc[voice_id_mask, "group"])
         name_hash_set = set(df.loc[voice_id_mask, "textmap_talk_sentence_name"])

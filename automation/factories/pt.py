@@ -34,7 +34,7 @@ class PtFactory(TurnBasedGameDataLoader):
         super().__init__(turn_based_game_data_dir, turn_based_game_data_language)
 
     def build_talk_sentence_config(self, name_hashes: Iterable[int] | None = None):
-        df = self.talk_sentence_config_table
+        df = self.talk_sentence_config_table.fillna(None)
         name_hash_mask = get_isin_mask(df["textmap_talk_sentence_name"], name_hashes)
         group_ids = set(df.loc[name_hash_mask, "group"])
         mask = df["group"].isin(group_ids)

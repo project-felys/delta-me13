@@ -16,7 +16,7 @@ class SftFactory(TurnBasedGameDataLoader):
     def build_talk_sentence_config_single_character(
         self, name_hash: int
     ) -> Iterator[Conversation]:
-        df = self.talk_sentence_config_table
+        df = self.talk_sentence_config_table.fillna(None)
         name_hash_mask = df["textmap_talk_sentence_name"] == name_hash
         group_ids = set(df.loc[name_hash_mask, "group"])
         mask = df["group"].isin(group_ids)
@@ -28,9 +28,10 @@ class SftFactory(TurnBasedGameDataLoader):
     def build_talk_sentence_config_everyone_in_group(
         self, name_hash_set: Set[int]
     ) -> Iterator[Conversation]:
+        df = self.talk_sentence_config_table.fillna(None)
         target_sub_dfs = (
             sub_df
-            for _, sub_df in self.talk_sentence_config_table.groupby("group")
+            for _, sub_df in df.groupby("group")
             if sub_df["textmap_talk_sentence_name"].isin(name_hash_set).any()
         )
 
@@ -41,9 +42,12 @@ class SftFactory(TurnBasedGameDataLoader):
     def __build_one_talk_sentence_config(
         self, df: pd.DataFrame, assistant_name_hash: int
     ) -> Conversation:
-        df = df[
-            ["talk_sentence_id", "textmap_talk_sentence_name", "talk_sentence_text"]
+        fields = [
+            "talk_sentence_id",
+            "textmap_talk_sentence_name",
+            "talk_sentence_text",
         ]
+        df = df[fields]
         rounds = []
 
         i = 0

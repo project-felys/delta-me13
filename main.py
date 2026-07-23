@@ -1,13 +1,11 @@
 import argparse
 import json
 import multiprocessing as mp
-import pandas as pd
 import os
 from pathlib import Path
 from typing import Callable, List, Mapping
 
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
-pd.set_option("future.no_silent_downcasting", True)
 
 from automation.implementation.task import pt, sft, tts
 

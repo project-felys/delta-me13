@@ -3,22 +3,10 @@
 ## Preprocess
 
 ```bash
-python3 into_swift_format.py \
-  --jsonl "cyrene/Chinese(PRC).jsonl" \
-  --output-dir audio/raw
-```
-
-```bash
-python3 precompute_audio_codes.py \
-  --device cuda:0 \
-  --tokenizer-model-path Qwen/Qwen3-TTS-Tokenizer-12Hz \
-  --input-jsonl "audio/raw/Chinese(PRC).jsonl" \
-  --output-dir audio
-```
-
-```bash
-python3 split_train_test.py \
-  --jsonl "audio/Chinese(PRC).jsonl"
+python3 preprocess.py \
+  --dataset "corpora/tts/cyrene/Chinese(PRC)" \
+  --output-dir audio \
+  --tokenizer-path automation/implementation/tokenizer
 ```
 
 ## Train
