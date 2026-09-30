@@ -138,7 +138,7 @@ class TurnBasedGameDataLoader:
         item_id_to_text = {
             item["TextJoinItemID"]: self.__text_map[item["TextJoinText"]["Hash"]]
             for item in self.__text_join_item
-            if "TextJoinText" in item
+            if "TextJoinText" in item and item["TextJoinText"]["Hash"] in self.__text_map
         }
 
         text_join_id_to_text = {}
